@@ -36,7 +36,7 @@ async function refresh() {
     $('#records').replaceChildren();
     for(const r of records) {
       const tr = el('tr'), owner = el('td', r.person), item = el('td',r.item), sheet = el('td');
-      item.append(el('small',`${r.column}${r.row} · 未填写`));
+      item.append(el('small',`${r.column} 列 · 第 ${r.row}${r.end_row && r.end_row!==r.row?'–'+r.end_row:''} 行 · 未填写`));
       const link = el('a',r.sheet); link.href = s.document_url.split('?')[0] + '?tab=' + encodeURIComponent(r.sheet_id); link.target='_blank'; link.rel='noopener noreferrer'; sheet.append(link);
       tr.append(owner,item,sheet); $('#records').append(tr);
     }
@@ -55,7 +55,8 @@ $('#logout').onclick = async () => {try {await api('logout','POST',{});location.
 const form=$('#rule-form');
 function edit(rule) {
   form.reset(); form.hidden=false; $('#form-title').textContent=rule?'编辑监听规则':'添加监听规则';
-  for(const key of ['id','name','sheet_id','sheet_name','owner_column','target_column','start_row','end_row']) if(rule) form.elements[key].value = key.endsWith('column') ? col(rule[key]) : rule[key];
+  for(const key of ['id','name','sheet_id','sheet_name','owner_column','start_row','end_row']) if(rule) form.elements[key].value = key.endsWith('column') ? col(rule[key]) : rule[key];
+  form.elements.target_columns.value=rule?(rule.target_columns || [rule.target_column]).map(col).join(','):'B';
   if(!rule) form.elements.id.value='';
   form.elements.enabled.checked=rule ? rule.enabled : true;
   $('#sheet-select').value=''; form.scrollIntoView({behavior:'smooth',block:'start'});
@@ -67,7 +68,7 @@ async function renderRules() {
   for(const r of allRules) {
     const card=el('article',undefined,'rule-card'), top=el('div',undefined,'rule-top');
     top.append(el('h3',r.name),el('span',r.enabled?'监听中':'已暂停','badge '+(r.enabled?'good':'')));
-    card.append(top,el('p',`${r.sheet_name} · 责任人 ${col(r.owner_column)} 列 → 检查 ${col(r.target_column)} 列 · 第 ${r.start_row}–${r.end_row} 行`,'rule-meta'));
+    card.append(top,el('p',`${r.sheet_name} · 责任人 ${col(r.owner_column)} 列 → 检查 ${(r.target_columns || [r.target_column]).map(col).join('、')} 列 · 第 ${r.start_row}–${r.end_row} 行`,'rule-meta'));
     const actions=el('div',undefined,'rule-actions'), label=el('label',undefined,'checkbox'), toggle=el('input');toggle.type='checkbox';toggle.checked=r.enabled;label.append(toggle,document.createTextNode('启用'));
     toggle.onchange=async()=>{toggle.disabled=true;try{await api('rules/'+r.id,'PUT',{...r,enabled:toggle.checked});await renderRules();}catch(err){toggle.checked=r.enabled;toggle.disabled=false;toast(err.message);}};
     const buttons=el('div'), editButton=el('button','编辑','quiet'), del=el('button','删除','quiet danger');
@@ -78,6 +79,28 @@ async function renderRules() {
 form.onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(form));body.enabled=form.elements.enabled.checked;const id=body.id;delete body.id;const button=form.querySelector('[type=submit]');button.disabled=true;try{await api('rules'+(id?'/'+id:''),id?'PUT':'POST',body);form.hidden=true;await renderRules();toast('规则已保存，将自动重新查询');}catch(err){toast(err.message);}finally{button.disabled=false;}};
 $('#load-sheets').onclick=async()=>{const b=$('#load-sheets');b.disabled=true;b.textContent='读取中…';try{const sheets=await api('sheets');$('#sheet-select').replaceChildren(new Option('请选择工作表',''));for(const s of sheets){const o=new Option(s.title,s.sheetId);$('#sheet-select').append(o);}toast(`已读取 ${sheets.length} 个工作表`);}catch(err){toast(err.message);}finally{b.disabled=false;b.textContent='从腾讯文档读取工作表';}};
 $('#sheet-select').onchange=e=>{if(e.target.value){form.elements.sheet_id.value=e.target.value;form.elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
-async function loadSettings(){const s=await api('settings'),f=$('#settings-form');for(const key of ['document_url','file_id','interval_seconds','timeout_seconds','client_id','open_id']) f.elements[key].value=s[key];for(const key of ['access_token','refresh_token','client_secret']) f.elements[key].value='';f.elements.clear_secrets.checked=false;$('#access-state').textContent=s.access_token_configured?'Access Token 已保存；留空不修改。':'Access Token 尚未配置。';$('#refresh-state').textContent=s.refresh_token_configured&&s.client_secret_configured?'自动续期凭据已配置。':'配置 Refresh Token 和 Client Secret 后可自动续期。';}
-$('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;const data=Object.fromEntries(new FormData(f));data.clear_secrets=f.elements.clear_secrets.checked;try{await api('settings','PUT',data);await loadSettings();toast('设置已保存');}catch(err){toast(err.message);}finally{b.disabled=false;}};
-if(manage) Promise.all([renderRules(),loadSettings()]).catch(err=>toast(err.message));else{refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});}
+async function loadSettings(){const s=await api('settings'),f=$('#settings-form');for(const key of ['document_url','file_id','interval_seconds','timeout_seconds','client_id','open_id','smtp_host','smtp_port','smtp_security','smtp_sender','smtp_sender_name','smtp_recipient','smtp_recipient_name']) f.elements[key].value=s[key];for(const key of ['access_token','refresh_token','client_secret','smtp_password']) f.elements[key].value='';f.elements.clear_secrets.checked=false;f.elements.clear_smtp_password.checked=false;$('#smtp-state').textContent=s.smtp_password_configured?'发送密码已保存。':'发送密码尚未配置。';$('#access-state').textContent=s.access_token_configured?'Access Token 已保存；留空不修改。':'Access Token 尚未配置。';$('#refresh-state').textContent=s.refresh_token_configured&&s.client_secret_configured?'自动续期凭据已配置。':'配置 Refresh Token 和 Client Secret 后可自动续期。';}
+$('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;const data=Object.fromEntries(new FormData(f));data.clear_secrets=f.elements.clear_secrets.checked;data.clear_smtp_password=f.elements.clear_smtp_password.checked;try{await api('settings','PUT',data);await loadSettings();await loadRoster();toast('设置已保存');}catch(err){toast(err.message);}finally{b.disabled=false;}};
+if(manage) Promise.all([renderRules(),loadSettings(),loadRoster()]).catch(err=>toast(err.message));else{refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});}
+
+async function loadRoster() {
+  const roster=await api('roster'), f=$('#source-form');
+  if(roster.source) for(const key of ['sheet_id','sheet_name','column','start_row','end_row']) f.elements[key].value=key==='column'?col(roster.source[key]):roster.source[key];
+  $('#roster-names').replaceChildren();
+  for(const name of roster.names || []) {
+    const label=el('label',undefined,'checkbox'), check=el('input');check.type='checkbox';check.value=name;check.checked=!(roster.excluded || []).includes(name);label.append(check,document.createTextNode(name));$('#roster-names').append(label);
+  }
+  $('#save-selection').disabled=!roster.source;
+  $('#roster-state').textContent=roster.source?`${roster.names.length} 位同事 · 已选择 ${roster.names.filter(n=>!roster.excluded.includes(n)).length} 人 · 名单更新 ${date(roster.updated_at)}`:'请先配置同事名单，现有监听规则会在配置后继续检查。';
+  const status=await api('status');$('#layout-state').textContent='上次同步：'+date(status.layout_updated_at);
+}
+$('#source-load-sheets').onclick=async()=>{
+  const b=$('#source-load-sheets');b.disabled=true;
+  try{const sheets=await api('sheets');$('#source-sheet-select').replaceChildren(new Option('请选择名单工作表',''));for(const s of sheets)$('#source-sheet-select').append(new Option(s.title,s.sheetId));toast(`已读取 ${sheets.length} 个工作表`);}catch(e){toast(e.message);}finally{b.disabled=false;}
+};
+$('#source-sheet-select').onchange=e=>{if(e.target.value){$('#source-form').elements.sheet_id.value=e.target.value;$('#source-form').elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
+$('#source-form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('[type=submit]');b.disabled=true;try{await api('roster','PUT',Object.fromEntries(new FormData(e.target)));await loadRoster();toast('名单已更新，默认统计新同事');}catch(e){toast(e.message);}finally{b.disabled=false;}};
+$('#select-all').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=true);
+$('#select-none').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=false);
+$('#save-selection').onclick=async()=>{const b=$('#save-selection');b.disabled=true;try{const selected=[...$('#roster-names').querySelectorAll('input:checked')].map(c=>c.value);await api('roster/selection','PUT',{selected});await loadRoster();toast('统计范围已保存');}catch(e){toast(e.message);}finally{b.disabled=false;}};
+$('#refresh-layout').onclick=async()=>{const b=$('#refresh-layout');b.disabled=true;b.textContent='正在导出并同步…';try{const result=await api('layout/refresh','POST',{});$('#layout-state').textContent='上次同步：'+date(result.updated_at);toast('合并结构已更新');}catch(e){toast(e.message);}finally{b.disabled=false;b.textContent='刷新合并结构';}};

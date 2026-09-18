@@ -11,7 +11,9 @@ from pathlib import Path
 
 import aiohttp
 from aiohttp import web
-from .core import Store, SECRETS, doc_id, integer, missing_rows, now, validate_rule
+from .core import (Store, SECRETS, API_SECRETS, doc_id, integer, now, validate_rule,
+                   written_text, target_columns, task_ranges, missing_tasks,
+                   validate_source, refresh_roster)
 from .tencent import TencentClient, TencentError
 
 LOG = logging.getLogger(__name__)
@@ -40,35 +42,57 @@ class Monitor:
                         headers = await self.client.headers()
                         fid = await self.client.file_id(headers)
                         metadata = {x['sheetId']: x for x in await self.client.metadata(fid, headers)}
+                        roster = self.store.get('roster')
+                        if not roster or not roster.get('source'):
+                            raise TencentError('请先在监听管理中选择同事名单数据源')
+                        source = roster['source']
+                        source_meta = metadata.get(source['sheet_id'])
+                        if not source_meta:
+                            raise TencentError('名单 Sheet 已不存在，请重新选择数据源')
+                        names_cells = await self.client.read_column(fid, source['sheet_id'], source['column'], source['start_row'], source['end_row'], headers)
+                        roster = refresh_roster(source | {'sheet_name':source_meta['title']},
+                            [written_text(names_cells.get(r)) for r in range(source['start_row'],source['end_row']+1)], roster)
+                        self.store.set('roster',roster)
+                        names = [n for n in roster['names'] if n not in roster['excluded']]
+                        layout = await self.client.layout(fid,headers,metadata) if names else {'sheets':{}}
                         cache = {}
-                        for rule in rules:
+                        for rule in rules if names else []:
                             try:
                                 meta = metadata.get(rule['sheet_id'])
                                 if meta is None:
                                     raise TencentError('工作表不存在，请重新选择 Sheet')
-                                rule = rule | {'sheet_name': meta.get('title', rule['sheet_name'])}
+                                rule = rule | {'sheet_name':meta['title']}
                                 total = meta.get('rowTotal')
-                                if isinstance(total, int) and total > 0:
-                                    if rule['start_row'] > total:
+                                if isinstance(total,int) and total>0:
+                                    if rule['start_row']>total:
                                         raise TencentError('起始行超出工作表范围')
-                                    rule = rule | {'end_row': min(rule['end_row'], total)}
-                                cols = []
-                                for col in (rule['owner_column'], rule['target_column']):
+                                    rule = rule | {'end_row':min(rule['end_row'],total)}
+                                merges = layout['sheets'][rule['sheet_id']]
+                                spans = task_ranges(rule,merges)
+                                cols = set(target_columns(rule)) | {rule['owner_column']} | {x[2] for x in spans}
+                                # Read anchors of horizontally merged target cells too.
+                                for top,bottom,left,right in merges:
+                                    if top<=rule['end_row'] and bottom>=rule['start_row'] and any(left<=c<=right for c in target_columns(rule)):
+                                        cols.add(left)
+                                cells = {}
+                                for col in sorted(cols):
                                     key = (rule['sheet_id'], col, rule['start_row'], rule['end_row'])
                                     if key not in cache:
-                                        cache[key] = await self.client.read_column(fid, *key, headers)
-                                    cols.append(cache[key])
-                                results.extend(missing_rows(rule, *cols))
+                                        cache[key] = await self.client.read_column(fid,*key,headers)
+                                    cells.update({(row,col):value for row,value in cache[key].items()})
+                                results.extend(missing_tasks(rule,cells,merges,names))
                             except (TencentError, ValueError) as exc:
                                 errors.append(dict(rule=rule['name'], message=str(exc)))
-            except TencentError as exc:
+            except (TencentError, ValueError) as exc:
                 errors.append(dict(rule='文档连接', message=str(exc)))
             except Exception:
                 LOG.exception('Unexpected monitor failure')
                 errors.append(dict(rule='检查任务', message='检查发生内部错误，请查看服务器日志'))
             finally:
                 previous = self.store.get('snapshot', {})
-                snapshot = dict(last_attempt=started, finished_at=now(), errors=errors,
+                if previous.get('semantics_version') != 2:
+                    previous = {}
+                snapshot = dict(semantics_version=2, last_attempt=started, finished_at=now(), errors=errors,
                                 last_success=previous.get('last_success'),
                                 records=previous.get('records', []),
                                 people_count=previous.get('people_count'),
@@ -80,7 +104,7 @@ class Monitor:
                     seen = set()
                     unique = []
                     for r in results:
-                        key = (r['sheet_id'], r['row'], r['column'])
+                        key = (r['person'], r['sheet_id'], r['row'], r['end_row'], r['column'])
                         if key not in seen:
                             seen.add(key)
                             unique.append(r)
@@ -208,7 +232,9 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         m = app['monitor']
         return web.json_response(store.get('snapshot', {}) | dict(running=m.running,
             next_check=m.next_check, interval_seconds=store.settings()['interval_seconds'],
-            configured=bool(store.get('rules', []))))
+            configured=bool(store.get('rules', [])),
+            roster_configured=bool(store.get('roster')),
+            layout_updated_at=store.get('merge_layout',{}).get('updated_at')))
 
     async def check(request):
         if app['monitor'].running:
@@ -255,7 +281,8 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('设置格式错误')
-        for k in ('document_url', 'file_id', 'client_id', 'open_id', *SECRETS):
+        for k in ('document_url', 'file_id', 'client_id', 'open_id',
+                  'smtp_host', 'smtp_sender', 'smtp_sender_name', 'smtp_recipient', 'smtp_recipient_name', 'smtp_security', *SECRETS):
             if k in raw:
                 if not isinstance(raw[k], str) or len(raw[k]) > 4096 or '\n' in raw[k] or '\r' in raw[k]:
                     raise ValueError('设置项格式错误')
@@ -267,11 +294,24 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             raise ValueError('File ID 格式错误')
         s['interval_seconds'] = integer(raw.get('interval_seconds', s['interval_seconds']), 60, 86400, '检查间隔（秒）')
         s['timeout_seconds'] = integer(raw.get('timeout_seconds', s['timeout_seconds']), 5, 120, '请求超时（秒）')
+        s['smtp_port'] = integer(raw.get('smtp_port',s['smtp_port']),1,65535,'发送端口')
+        if s['smtp_security'] not in ('ssl','starttls'):
+            raise ValueError('SMTP 加密方式必须为 SSL 或 STARTTLS')
+        for key in ('smtp_sender','smtp_recipient'):
+            if s[key] and not re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+',s[key]):
+                raise ValueError('邮箱地址格式错误')
+        if s['smtp_host'] and not re.fullmatch(r'[a-zA-Z0-9.-]+',s['smtp_host']):
+            raise ValueError('SMTP 服务器请填写主机名，不含协议和端口')
+        if raw.get('clear_smtp_password') is True:
+            s['smtp_password'] = ''
         if raw.get('clear_secrets') is True:
-            for k in SECRETS:
+            for k in API_SECRETS:
                 s[k] = ''
-        if any(raw.get(k) for k in (*SECRETS, 'client_id', 'open_id')):
+        if any(raw.get(k) for k in (*API_SECRETS, 'client_id', 'open_id')):
             s['token_expires_at'] = 0
+        if (s['document_url'],s['file_id']) != (store.settings()['document_url'],store.settings()['file_id']):
+            store.set('roster',None)
+            store.set('merge_layout',{})
         store.set('settings', s)
         invalidate('设置已修改，等待重新查询')
         app['monitor'].wake.set()
@@ -279,6 +319,43 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def sheets(request):
         return web.json_response(await app['client'].sheets())
+
+    async def roster(request):
+        current = store.get('roster')
+        if request.method == 'GET':
+            return web.json_response(current or {})
+        busy()
+        raw = await request.json()
+        if not isinstance(raw,dict):
+            raise ValueError('名单设置格式错误')
+        if request.path.endswith('/selection'):
+            if not current:
+                raise ValueError('请先读取名单数据源')
+            selected = raw.get('selected')
+            if not isinstance(selected,list) or any(not isinstance(n,str) or n not in current['names'] for n in selected):
+                raise ValueError('选择的姓名必须来自当前名单')
+            absent = [n for n in current['excluded'] if n not in current['names']]
+            current['excluded'] = absent + [n for n in current['names'] if n not in selected]
+        else:
+            source = validate_source(raw)
+            names, source = await app['client'].roster(source)
+            current = refresh_roster(source,names,current)
+        store.set('roster',current)
+        invalidate('名单或统计人员已更新，等待重新查询')
+        app['monitor'].wake.set()
+        return web.json_response(current)
+
+    async def refresh_layout(request):
+        busy()
+        async with app['client'].lock:
+            client = app['client']
+            headers = await client.headers()
+            fid = await client.file_id(headers)
+            metadata = {m['sheetId']:m for m in await client.metadata(fid,headers)}
+            result = await client.layout(fid,headers,metadata,force=True)
+        invalidate('合并结构已刷新，等待重新查询')
+        app['monitor'].wake.set()
+        return web.json_response({'updated_at':result['updated_at']})
 
     async def health(request):
         return web.json_response({'ok': True})
@@ -288,6 +365,8 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check),
         web.get('/api/rules', rules), web.post('/api/rules', rules),
         web.put('/api/rules/{id}', rules), web.delete('/api/rules/{id}', rules),
+        web.get('/api/roster',roster), web.put('/api/roster',roster),
+        web.put('/api/roster/selection',roster), web.post('/api/layout/refresh',refresh_layout),
         web.get('/api/settings', settings), web.put('/api/settings', settings), web.get('/api/sheets', sheets)])
     return app
 

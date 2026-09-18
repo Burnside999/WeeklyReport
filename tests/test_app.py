@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
-from app.core import Store, cell_text, column, doc_id, letters, missing_rows, validate_rule
+from app.core import Store, written_text, column, doc_id, letters, missing_tasks, validate_rule
 from app.main import Monitor, create_app
 from app.tencent import TencentClient, TencentError
 
@@ -28,11 +28,12 @@ class CoreTests(unittest.TestCase):
     def test_blank_semantics_and_row_alignment(self):
         owners={2:cell(' 张三 '),3:cell('李四'),4:cell(''),5:cell('王五')}
         targets={2:cell(' \n\t'),3:{'cellValue':{'number':0}},4:cell(''),5:cell('已完成')}
-        rows=missing_rows(rule(),owners,targets)
-        self.assertEqual([(r['person'],r['row']) for r in rows],[('张三',2)])
-        self.assertTrue(cell_text({'cellValue':{'boolean':False}}))
-        self.assertTrue(cell_text(cell('0')))
-        self.assertFalse(cell_text(None))
+        cells={(r,1):v for r,v in owners.items()} | {(r,3):v for r,v in targets.items()}
+        rows=missing_tasks(rule(),cells,[],['张三','李四','王五'])
+        self.assertEqual([(r['person'],r['row']) for r in rows],[('张三',2),('李四',3)])
+        self.assertFalse(written_text({'cellValue':{'boolean':False}}))
+        self.assertTrue(written_text(cell('0')))
+        self.assertFalse(written_text(None))
 
     def test_rule_validation(self):
         self.assertEqual(validate_rule(rule(owner_column='AA'))['owner_column'],27)
@@ -47,6 +48,7 @@ class CoreTests(unittest.TestCase):
 
 class FakeClient:
     def __init__(self): self.lock=asyncio.Lock(); self.fail=False
+    async def layout(self,*args,**kwargs): return {'sheets':{'tab1':[]}}
     async def headers(self): return {}
     async def file_id(self,h): return 'file'
     async def metadata(self,f,h): return [dict(sheetId='tab1',title='研发',rowTotal=5)]
@@ -58,7 +60,7 @@ class FakeClient:
 class MonitorTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.store=Store(self.tmp.name+'/db')
-        self.store.set('rules',[rule()]);self.client=FakeClient();self.m=Monitor(self.store,self.client)
+        self.store.set('rules',[rule()]);self.store.set('roster',{'source':{'sheet_id':'tab1','column':1,'start_row':2,'end_row':5},'names':['张三','李四'],'excluded':[]});self.client=FakeClient();self.m=Monitor(self.store,self.client)
     async def asyncTearDown(self): self.store.close();self.tmp.cleanup()
     async def test_dedup_and_stale_on_failure(self):
         await self.m.check();good=self.store.get('snapshot')

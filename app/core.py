@@ -6,10 +6,13 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 DEFAULT_URL = 'https://docs.qq.com/sheet/DY3hoUWtYVGJOR1lz'
-SECRETS = ('access_token', 'refresh_token', 'client_secret')
+API_SECRETS = ('access_token', 'refresh_token', 'client_secret')
+SECRETS = (*API_SECRETS, 'smtp_password')
 DEFAULTS = dict(document_url=DEFAULT_URL, file_id='', interval_seconds=300,
                 timeout_seconds=20, client_id='', open_id='', access_token='',
-                refresh_token='', client_secret='', token_expires_at=0)
+                refresh_token='', client_secret='', token_expires_at=0,
+                smtp_host='', smtp_port=465, smtp_security='ssl', smtp_sender='',
+                smtp_password='', smtp_sender_name='', smtp_recipient='', smtp_recipient_name='')
 
 
 def now():
@@ -71,39 +74,16 @@ def validate_rule(raw):
     enabled = raw.get('enabled', True)
     if type(enabled) is not bool:
         raise ValueError('启用状态必须为布尔值')
+    cols = raw.get('target_columns', [raw.get('target_column', 'B')])
+    if isinstance(cols, str):
+        cols = re.split(r'[,，、\s]+', cols.strip())
+    if not isinstance(cols, list) or not 1 <= len(cols) <= 20:
+        raise ValueError('请选择 1–20 个需要检查的列')
+    cols = sorted(set(column(c) for c in cols))
     return dict(name=name, sheet_id=sheet, sheet_name=str(raw.get('sheet_name', sheet))[:100],
                 owner_column=column(raw.get('owner_column', 'A')),
-                target_column=column(raw.get('target_column', 'B')),
+                target_column=cols[0], target_columns=cols,
                 start_row=start, end_row=end, enabled=enabled)
-
-
-def cell_text(cell):
-    if cell is None:
-        return ''
-    if not isinstance(cell, dict):
-        return str(cell).strip()
-    value = cell.get('cellValue')
-    if value is None:
-        return ''
-    if not isinstance(value, dict):
-        raise ValueError('腾讯 API 返回了无法识别的单元格格式')
-    if 'text' in value:
-        return str(value['text'] if value['text'] is not None else '').strip()
-    if not value:
-        return ''
-    # Numbers (including zero), booleans, images and locations count as filled.
-    return json.dumps(value, ensure_ascii=False, sort_keys=True)
-
-
-def missing_rows(rule, owners, targets):
-    result = []
-    for row in range(rule['start_row'], rule['end_row'] + 1):
-        owner = cell_text(owners.get(row))
-        if owner and not cell_text(targets.get(row)):
-            result.append(dict(person=owner, row=row, sheet_id=rule['sheet_id'],
-                               sheet=rule['sheet_name'], item=rule['name'],
-                               column=letters(rule['target_column']), rule_id=rule['id']))
-    return result
 
 
 class Store:
@@ -129,3 +109,86 @@ class Store:
 
     def close(self):
         self.db.close()
+
+
+def written_text(cell):
+    """Only actual text (including a hyperlink's label) satisfies the new rule."""
+    if not isinstance(cell, dict):
+        return cell.strip() if isinstance(cell, str) else ''
+    value = cell.get('cellValue') or {}
+    if not isinstance(value, dict):
+        raise ValueError('单元格格式异常')
+    text = value.get('text', '')
+    if not text and isinstance(value.get('link'), dict):
+        text = value['link'].get('text', '')
+    return text.strip() if isinstance(text, str) else ''
+
+
+def target_columns(rule):
+    return rule.get('target_columns') or [rule['target_column']]
+
+
+def validate_source(raw):
+    r = validate_rule(dict(name='同事名单', sheet_id=raw.get('sheet_id', ''),
+        sheet_name=raw.get('sheet_name', ''), owner_column=raw.get('column', 'A'),
+        start_row=raw.get('start_row', 1), end_row=raw.get('end_row', 100)))
+    return {k: r[k] for k in ('sheet_id', 'sheet_name', 'start_row', 'end_row')} | {'column':r['owner_column']}
+
+
+def refresh_roster(source, names, previous=None):
+    names = list(dict.fromkeys(n.strip() for n in names if n.strip()))
+    if not names:
+        raise ValueError('名单范围没有读取到姓名，请检查 Sheet、列和起止行')
+    # Preserve exclusions across refreshes and reappearance; new names are selected.
+    excluded = (previous or {}).get('excluded', [])
+    return dict(source=source, names=names, excluded=excluded, updated_at=now())
+
+
+def task_ranges(rule, merges):
+    """Owner-cell merge is a task; unmerged rows remain separate tasks."""
+    col = rule['owner_column']
+    relevant = sorted((m for m in merges if m[2] <= col <= m[3]), key=lambda m:m[0])
+    spans, row, i = [], rule['start_row'], 0
+    while row <= rule['end_row']:
+        while i < len(relevant) and relevant[i][1] < row:
+            i += 1
+        if i < len(relevant) and relevant[i][0] <= row <= relevant[i][1]:
+            start, end, left, right = relevant[i]
+            if start < rule['start_row'] or end > rule['end_row']:
+                raise ValueError(f'监听范围截断了责任人合并区域 {letters(left)}{start}:{letters(right)}{end}，请扩大起止行')
+            spans.append((start, end, left))
+            row = end + 1
+        else:
+            spans.append((row, row, col))
+            row += 1
+    return spans
+
+
+def missing_tasks(rule, cells, merges, names):
+    result = []
+    for first, last, owner_col in task_ranges(rule, merges):
+        owner = written_text(cells.get((first, owner_col)))
+        people = [name for name in names if name in owner]
+        if not people:
+            continue
+        filled = False
+        for row in range(first, last + 1):
+            for col in target_columns(rule):
+                anchor = (row, col)
+                for top, bottom, left, right in merges:
+                    if top <= row <= bottom and left <= col <= right:
+                        if top < first or bottom > last:
+                            raise ValueError('填写列合并区域跨越多个责任人任务，请拆分合并单元格')
+                        anchor = (top, left)
+                        break
+                if written_text(cells.get(anchor)):
+                    filled = True
+                    break
+            if filled:
+                break
+        if not filled:
+            for person in people:
+                result.append(dict(person=person, row=first, end_row=last,
+                    sheet_id=rule['sheet_id'], sheet=rule['sheet_name'], item=rule['name'],
+                    column=','.join(letters(c) for c in target_columns(rule)), rule_id=rule['id']))
+    return result
