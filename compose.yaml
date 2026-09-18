@@ -1,0 +1,27 @@
+services:
+  weeklyreport:
+    build: .
+    image: weeklyreport:local
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${PORT:-8080}:8080"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Please set ADMIN_PASSWORD in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_HOURS: ${SESSION_HOURS:-24}
+      DATA_DIR: /data
+      PORT: 8080
+      TZ: Asia/Shanghai
+    volumes:
+      - weeklyreport-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+volumes:
+  weeklyreport-data:
