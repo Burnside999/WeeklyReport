@@ -12,7 +12,7 @@ DEFAULTS = dict(document_url=DEFAULT_URL, file_id='', interval_seconds=300,
                 timeout_seconds=20, client_id='', open_id='', access_token='',
                 refresh_token='', client_secret='', token_expires_at=0,
                 smtp_host='', smtp_port=465, smtp_security='ssl', smtp_sender='',
-                smtp_password='', smtp_sender_name='', smtp_recipient='', smtp_recipient_name='')
+                smtp_password='', smtp_sender_name='')
 
 
 def now():

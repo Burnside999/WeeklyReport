@@ -15,6 +15,8 @@ from .core import (Store, SECRETS, API_SECRETS, doc_id, integer, now, validate_r
                    written_text, target_columns, task_ranges, missing_tasks,
                    validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables)
 from .variables import build_variables
+from .templates import MailEngine, TemplateConflict
+from .mail import DeliveryError, email_address
 from .tencent import TencentClient, TencentError
 
 LOG = logging.getLogger(__name__)
@@ -134,6 +136,10 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         raise RuntimeError('ADMIN_PASSWORD 必须设置为至少 12 字符的自定义密码')
     store = Store(str(Path(data_dir or os.environ.get('DATA_DIR', './data')) / 'weeklyreport.db'))
     migrate_variables(store)
+    settings_data = store.settings()
+    settings_data.pop("smtp_recipient", None)
+    settings_data.pop("smtp_recipient_name", None)
+    store.set("settings", settings_data)
     sessions, attempts = {}, {}
     salt = secrets.token_bytes(16)
     password_hash = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
@@ -158,6 +164,10 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             response = await handler(request)
         except (ValueError, TypeError, KeyError) as exc:
             response = web.json_response({'error': str(exc)[:200]}, status=400)
+        except TemplateConflict as exc:
+            response = web.json_response({'error': str(exc)} | exc.details, status=409)
+        except DeliveryError as exc:
+            response = web.json_response({'error': str(exc)}, status=502)
         except TencentError as exc:
             response = web.json_response({'error': str(exc)}, status=502)
         except web.HTTPException as exc:
@@ -175,8 +185,14 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             client = TencentClient(store, session)
             monitor = Monitor(store, client)
             app['client'], app['monitor'] = client, monitor
+            mailer = app['mail_engine'] = MailEngine(store, monitor)
+            mail_task = asyncio.create_task(mailer.loop()) if start_scheduler else None
             task = asyncio.create_task(monitor.loop()) if start_scheduler else None
             yield
+            mailer.stopping = True
+            mailer.wake.set()
+            if mail_task:
+                await mail_task
             if task:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -226,7 +242,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def static(request):
         name = request.match_info['name']
-        if name not in ('app.js', 'login.js', 'style.css'):
+        if name not in ('app.js', 'mail.js', 'login.js', 'style.css'):
             raise web.HTTPNotFound()
         return web.Response(body=(ROOT / name).read_bytes(),
                             content_type='text/css' if name.endswith('.css') else 'application/javascript')
@@ -291,11 +307,12 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             return web.json_response({k: v for k, v in s.items() if k not in SECRETS} |
                                      {k + '_configured': bool(s[k]) for k in SECRETS})
         busy()
+        app['mail_engine'].ensure_idle()
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('设置格式错误')
         for k in ('document_url', 'file_id', 'client_id', 'open_id',
-                  'smtp_host', 'smtp_sender', 'smtp_sender_name', 'smtp_recipient', 'smtp_recipient_name', 'smtp_security', *SECRETS):
+                  'smtp_host', 'smtp_sender', 'smtp_sender_name', 'smtp_security', *SECRETS):
             if k in raw:
                 if not isinstance(raw[k], str) or len(raw[k]) > 4096 or '\n' in raw[k] or '\r' in raw[k]:
                     raise ValueError('设置项格式错误')
@@ -310,9 +327,8 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         s['smtp_port'] = integer(raw.get('smtp_port',s['smtp_port']),1,65535,'发送端口')
         if s['smtp_security'] not in ('ssl','starttls'):
             raise ValueError('SMTP 加密方式必须为 SSL 或 STARTTLS')
-        for key in ('smtp_sender','smtp_recipient'):
-            if s[key] and not re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+',s[key]):
-                raise ValueError('邮箱地址格式错误')
+        if s['smtp_sender']:
+            email_address(s['smtp_sender'])
         if s['smtp_host'] and not re.fullmatch(r'[a-zA-Z0-9.-]+',s['smtp_host']):
             raise ValueError('SMTP 服务器请填写主机名，不含协议和端口')
         if raw.get('clear_smtp_password') is True:
@@ -370,12 +386,37 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         app['monitor'].wake.set()
         return web.json_response({'updated_at':result['updated_at']})
 
+    async def templates(request):
+        engine = app['mail_engine']
+        if request.method == 'GET':
+            return web.json_response(engine.items())
+        raw = await request.json()
+        if not isinstance(raw, dict):
+            raise ValueError('请求格式错误')
+        identifier = request.match_info.get('id')
+        action = request.match_info.get('action')
+        if action == 'send':
+            result = await engine.manual(identifier, raw)
+        elif action == 'reset':
+            result = engine.reset(identifier, raw.get('revision'))
+        elif action:
+            raise web.HTTPNotFound()
+        elif request.method == 'DELETE':
+            engine.delete(identifier, raw.get('revision'))
+            result = {'ok': True}
+        else:
+            result = engine.save(raw, identifier)
+        return web.json_response(result)
+
     async def health(request):
         return web.json_response({'ok': True})
 
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
-        web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
+        web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check),
+        web.get('/api/templates', templates), web.post('/api/templates', templates),
+        web.put('/api/templates/{id}', templates), web.delete('/api/templates/{id}', templates),
+        web.post('/api/templates/{id}/{action}', templates),
         web.get('/api/variables', variables), web.get('/api/rules', rules), web.post('/api/rules', rules),
         web.put('/api/rules/{id}', rules), web.delete('/api/rules/{id}', rules),
         web.get('/api/roster',roster), web.put('/api/roster',roster),
