@@ -44,7 +44,7 @@ class Monitor:
                         metadata = {x['sheetId']: x for x in await self.client.metadata(fid, headers)}
                         roster = self.store.get('roster')
                         if not roster or not roster.get('source'):
-                            raise TencentError('请先在监听管理中选择同事名单数据源')
+                            raise TencentError('请先在设置中选择同事名单数据源')
                         source = roster['source']
                         source_meta = metadata.get(source['sheet_id'])
                         if not source_meta:
@@ -361,7 +361,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         return web.json_response({'ok': True})
 
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
-        web.get('/manage', page), web.get('/static/{name}', static), web.post('/api/login', login),
+        web.get('/manage', page), web.get('/settings', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check),
         web.get('/api/rules', rules), web.post('/api/rules', rules),
         web.put('/api/rules/{id}', rules), web.delete('/api/rules/{id}', rules),

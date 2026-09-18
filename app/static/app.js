@@ -1,8 +1,11 @@
 'use strict';
 const $ = s => document.querySelector(s);
-const manage = location.pathname === '/manage';
-$('#home').hidden = manage; $('#manage').hidden = !manage;
-$(manage ? '#nav-manage' : '#nav-home').classList.add('active');
+const page = location.pathname === '/settings' ? 'settings' : location.pathname === '/manage' ? 'manage' : 'home';
+for (const name of ['home', 'manage', 'settings']) {
+  $('#' + name).hidden = page !== name;
+  $('#nav-' + name).classList.toggle('active', page === name);
+  if (page === name) $('#nav-' + name).setAttribute('aria-current', 'page');
+}
 let allRules = [], toastTimer, checking = false;
 async function api(path, method = 'GET', body) {
   const response = await fetch('/api/' + path, {method, headers:{'Content-Type':'application/json','X-Requested-With':'WeeklyReport'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
@@ -17,7 +20,7 @@ function el(tag, text, cls) { const e = document.createElement(tag); if (text !=
 function date(value) { return value ? new Date(value).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}) : '尚未查询'; }
 function col(n) { let s=''; while(n) { n--; s=String.fromCharCode(65+n%26)+s; n=Math.floor(n/26); } return s; }
 async function refresh() {
-  if(manage) return;
+  if(page !== 'home') return;
   try {
     const s = await api('status');
     checking = s.running; $('#check').disabled = checking; $('#check').textContent = checking ? '查询中…' : '立即查询 ↻';
@@ -80,8 +83,10 @@ form.onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new For
 $('#load-sheets').onclick=async()=>{const b=$('#load-sheets');b.disabled=true;b.textContent='读取中…';try{const sheets=await api('sheets');$('#sheet-select').replaceChildren(new Option('请选择工作表',''));for(const s of sheets){const o=new Option(s.title,s.sheetId);$('#sheet-select').append(o);}toast(`已读取 ${sheets.length} 个工作表`);}catch(err){toast(err.message);}finally{b.disabled=false;b.textContent='从腾讯文档读取工作表';}};
 $('#sheet-select').onchange=e=>{if(e.target.value){form.elements.sheet_id.value=e.target.value;form.elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
 async function loadSettings(){const s=await api('settings'),f=$('#settings-form');for(const key of ['document_url','file_id','interval_seconds','timeout_seconds','client_id','open_id','smtp_host','smtp_port','smtp_security','smtp_sender','smtp_sender_name','smtp_recipient','smtp_recipient_name']) f.elements[key].value=s[key];for(const key of ['access_token','refresh_token','client_secret','smtp_password']) f.elements[key].value='';f.elements.clear_secrets.checked=false;f.elements.clear_smtp_password.checked=false;$('#smtp-state').textContent=s.smtp_password_configured?'发送密码已保存。':'发送密码尚未配置。';$('#access-state').textContent=s.access_token_configured?'Access Token 已保存；留空不修改。':'Access Token 尚未配置。';$('#refresh-state').textContent=s.refresh_token_configured&&s.client_secret_configured?'自动续期凭据已配置。':'配置 Refresh Token 和 Client Secret 后可自动续期。';}
-$('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;const data=Object.fromEntries(new FormData(f));data.clear_secrets=f.elements.clear_secrets.checked;data.clear_smtp_password=f.elements.clear_smtp_password.checked;try{await api('settings','PUT',data);await loadSettings();await loadRoster();toast('设置已保存');}catch(err){toast(err.message);}finally{b.disabled=false;}};
-if(manage) Promise.all([renderRules(),loadSettings(),loadRoster()]).catch(err=>toast(err.message));else{refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});}
+$('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,buttons=[...f.elements].filter(el=>el.type==='submit');buttons.forEach(b=>b.disabled=true);const data=Object.fromEntries(new FormData(f));data.clear_secrets=f.elements.clear_secrets.checked;data.clear_smtp_password=f.elements.clear_smtp_password.checked;try{await api('settings','PUT',data);await loadSettings();await loadRoster();toast('设置已保存');}catch(err){toast(err.message);}finally{buttons.forEach(b=>b.disabled=false);}};
+if(page === 'manage') renderRules().catch(err=>toast(err.message));
+else if(page === 'settings') Promise.all([loadSettings(),loadRoster()]).catch(err=>toast(err.message));
+else{refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});}
 
 async function loadRoster() {
   const roster=await api('roster'), f=$('#source-form');

@@ -50,7 +50,7 @@ class TencentClient:
     async def headers(self):
         s = self.store.settings()
         if not s['client_id'] or not s['open_id']:
-            raise TencentError('请先在管理 → 高级设置中配置腾讯文档 Client ID 和 Open ID')
+            raise TencentError('请先在设置 → 高级设置中配置腾讯文档 Client ID 和 Open ID')
         if s['refresh_token'] and s['client_secret'] and (not s['access_token'] or s['token_expires_at'] < time.time() + 120):
             data = await self.request('/oauth/v2/token', dict(client_id=s['client_id'],
                 client_secret=s['client_secret'], grant_type='refresh_token', refresh_token=s['refresh_token']))
