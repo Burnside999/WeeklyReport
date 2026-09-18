@@ -1,6 +1,6 @@
 # WeeklyReport · 周报填写检查
 
-手机优先的腾讯文档在线表格监听器。密码登录后有三个页面：**填写情况**、**监听管理**与**设置**。默认每 5 分钟由服务器检查一次，关闭浏览器也会继续运行。
+手机优先的腾讯文档在线表格监听器。密码登录后有四个页面：**填写情况**、**监听管理**、**设置**与**变量表**。默认每 5 分钟由服务器检查一次，关闭浏览器也会继续运行。
 
 ## Docker 部署
 
@@ -136,4 +136,29 @@ node --check app/static/login.js
 
 开发交付时未提供腾讯 API 凭据，无法对实际文档做授权 API 联调；接口适配依据上述官方文档，使用模拟响应验证。请配置凭据后通过“读取工作表”和“立即查询”完成真实连通性验证。
 
-页面分为“填写情况”“监听管理”和“设置”。监听管理仅编辑规则；设置页顶部展示腾讯表格地址，其后依次为默认折叠的选择数据源、合并单元格结构刷新和高级设置。顶部“保存设置”与“保存高级设置”均保存地址及高级配置。
+页面依次为“填写情况”“监听管理”“设置”和“变量表”。监听管理仅编辑规则；设置页顶部展示腾讯表格地址，其后依次为默认折叠的选择数据源、合并单元格结构刷新和高级设置。顶部“保存设置”与“保存高级设置”均保存地址及高级配置。
+
+
+## 变量表与邮件模板接口
+
+“变量表”以变量名、类型、描述、值四列展示数据，变量名显示为行内代码。手机可横向滑动表格。页面打开时读取，之后每 30 秒刷新，也可以点“刷新变量”。这些操作仅计算本地变量，不调用腾讯 API；需要最新填写结果时，请在首页“立即查询”。邮件模板编辑和发送仍待后续实现。
+
+日期和时间统一使用北京时间（Asia/Shanghai，UTC+8），每周从周一到周日；日期为 `YYYY-MM-DD`，时间为 `HH:mm:ss`，查询时间含 `+08:00` 时区。34 个全局变量：
+
+- `global.time`、`global.date`、`global.week.now`（星期一至星期日）。
+- `global.week`、`global.preweek`、`global.postweek` 下均有 `monday`、`tuesday`、`wednesday`、`thursday`、`friday`、`saturday`、`sunday` 和 `duration`。日期区间格式为 `YYYY-MM-DD ~ YYYY-MM-DD`，包含首尾日期。
+- `global.listencount`、`global.listenenable`、`global.url`、`global.personcount`、`global.personlist`、`global.healthy`、`global.lastquery`。
+
+每条规则可在监听管理中编辑“变量名”，首次自动分配 `listenerX`；旧规则升级时自动补全并持久化，编辑、重启不会重新编号。命名以英文字母开头，仅含英文字母和数字，长度 1–64；不区分大小写检查唯一性，保留 `global`。引用名称使用保存时的大小写。重命名后旧引用失效。
+
+每个规则前缀下提供 `name`、`sheetname`、`sheeturl`、`personcol`、`taskcol`、`startrow`、`endrow`、`enable`、`personcount`、`personlist`。列号用字母，多列用英文逗号连接；人数和姓名列表均去重，即使多个规则覆盖同一任务，也分别保留每个规则的未交名单。
+
+`global.healthy` 为“正常”“查询中”“异常”或“等待首次查询”。`global.lastquery` 为最后一次查询的开始时间，包含失败查询。初次查询前、查询失败、配置修改后尚未重查的统计返回 `null`，界面显示“未知”；停用规则的未交统计也返回 `null`。有效查询确实无人未交时才返回人数 `0` 和名单空字符串。升级前的旧快照未保存逐规则名单时，逐规则统计需要等一次成功查询。
+
+后续模板模块可直接调用 `app.variables.build_variables(store, running=False)`，或通过受密码登录保护的 `GET /api/variables` 获取：
+
+- `rows`：四列定义，包含 `name`、`type`、`description`、`value`。
+- `values`：完整变量名到原生 JSON 值的映射，布尔值和整数保留类型；未知值为 `null`。
+- `generated_at`、`timezone`、`query_running`、`results_available`：生成时间和结果状态。
+
+模板渲染器应按完整变量名查找 `values`，明确处理未知值；不要使用 `eval`。变量接口只公开本节列出的业务数据，不公开密码、令牌、SMTP 凭据。

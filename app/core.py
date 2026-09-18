@@ -86,6 +86,34 @@ def validate_rule(raw):
                 start_row=start, end_row=end, enabled=enabled)
 
 
+def variable_name(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9]{0,63}', value):
+        raise ValueError('变量名须以字母开头，仅含英文字母和数字，长度 1–64')
+    if value.lower() == 'global':
+        raise ValueError('global 是保留变量名')
+    return value
+
+
+def allocate_variable(store, items):
+    used = {r.get('variable_name', '').lower() for r in items}
+    number = store.get('listener_sequence', 0) + 1
+    while f'listener{number}'.lower() in used:
+        number += 1
+    store.set('listener_sequence', number)
+    return f'listener{number}'
+
+
+def migrate_variables(store):
+    items = store.get('rules', [])
+    changed = False
+    for rule in items:
+        if not rule.get('variable_name'):
+            rule['variable_name'] = allocate_variable(store, items)
+            changed = True
+    if changed:
+        store.set('rules', items)
+
+
 class Store:
     def __init__(self, path):
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)

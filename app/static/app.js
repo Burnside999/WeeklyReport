@@ -1,7 +1,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
-const page = location.pathname === '/settings' ? 'settings' : location.pathname === '/manage' ? 'manage' : 'home';
-for (const name of ['home', 'manage', 'settings']) {
+const page = location.pathname === '/variables' ? 'variables' : location.pathname === '/settings' ? 'settings' : location.pathname === '/manage' ? 'manage' : 'home';
+for (const name of ['home', 'manage', 'settings', 'variables']) {
   $('#' + name).hidden = page !== name;
   $('#nav-' + name).classList.toggle('active', page === name);
   if (page === name) $('#nav-' + name).setAttribute('aria-current', 'page');
@@ -58,7 +58,7 @@ $('#logout').onclick = async () => {try {await api('logout','POST',{});location.
 const form=$('#rule-form');
 function edit(rule) {
   form.reset(); form.hidden=false; $('#form-title').textContent=rule?'编辑监听规则':'添加监听规则';
-  for(const key of ['id','name','sheet_id','sheet_name','owner_column','start_row','end_row']) if(rule) form.elements[key].value = key.endsWith('column') ? col(rule[key]) : rule[key];
+  for(const key of ['id','name','variable_name','sheet_id','sheet_name','owner_column','start_row','end_row']) if(rule) form.elements[key].value = key.endsWith('column') ? col(rule[key]) : rule[key];
   form.elements.target_columns.value=rule?(rule.target_columns || [rule.target_column]).map(col).join(','):'B';
   if(!rule) form.elements.id.value='';
   form.elements.enabled.checked=rule ? rule.enabled : true;
@@ -71,7 +71,7 @@ async function renderRules() {
   for(const r of allRules) {
     const card=el('article',undefined,'rule-card'), top=el('div',undefined,'rule-top');
     top.append(el('h3',r.name),el('span',r.enabled?'监听中':'已暂停','badge '+(r.enabled?'good':'')));
-    card.append(top,el('p',`${r.sheet_name} · 责任人 ${col(r.owner_column)} 列 → 检查 ${(r.target_columns || [r.target_column]).map(col).join('、')} 列 · 第 ${r.start_row}–${r.end_row} 行`,'rule-meta'));
+    card.append(top,el('code',r.variable_name,'variable-code'),el('p',`${r.sheet_name} · 责任人 ${col(r.owner_column)} 列 → 检查 ${(r.target_columns || [r.target_column]).map(col).join('、')} 列 · 第 ${r.start_row}–${r.end_row} 行`,'rule-meta'));
     const actions=el('div',undefined,'rule-actions'), label=el('label',undefined,'checkbox'), toggle=el('input');toggle.type='checkbox';toggle.checked=r.enabled;label.append(toggle,document.createTextNode('启用'));
     toggle.onchange=async()=>{toggle.disabled=true;try{await api('rules/'+r.id,'PUT',{...r,enabled:toggle.checked});await renderRules();}catch(err){toggle.checked=r.enabled;toggle.disabled=false;toast(err.message);}};
     const buttons=el('div'), editButton=el('button','编辑','quiet'), del=el('button','删除','quiet danger');
@@ -85,6 +85,7 @@ $('#sheet-select').onchange=e=>{if(e.target.value){form.elements.sheet_id.value=
 async function loadSettings(){const s=await api('settings'),f=$('#settings-form');for(const key of ['document_url','file_id','interval_seconds','timeout_seconds','client_id','open_id','smtp_host','smtp_port','smtp_security','smtp_sender','smtp_sender_name','smtp_recipient','smtp_recipient_name']) f.elements[key].value=s[key];for(const key of ['access_token','refresh_token','client_secret','smtp_password']) f.elements[key].value='';f.elements.clear_secrets.checked=false;f.elements.clear_smtp_password.checked=false;$('#smtp-state').textContent=s.smtp_password_configured?'发送密码已保存。':'发送密码尚未配置。';$('#access-state').textContent=s.access_token_configured?'Access Token 已保存；留空不修改。':'Access Token 尚未配置。';$('#refresh-state').textContent=s.refresh_token_configured&&s.client_secret_configured?'自动续期凭据已配置。':'配置 Refresh Token 和 Client Secret 后可自动续期。';}
 $('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,buttons=[...f.elements].filter(el=>el.type==='submit');buttons.forEach(b=>b.disabled=true);const data=Object.fromEntries(new FormData(f));data.clear_secrets=f.elements.clear_secrets.checked;data.clear_smtp_password=f.elements.clear_smtp_password.checked;try{await api('settings','PUT',data);await loadSettings();await loadRoster();toast('设置已保存');}catch(err){toast(err.message);}finally{buttons.forEach(b=>b.disabled=false);}};
 if(page === 'manage') renderRules().catch(err=>toast(err.message));
+else if(page === 'variables') {loadVariables();setInterval(()=>{if(!document.hidden)loadVariables();},30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadVariables();});}
 else if(page === 'settings') Promise.all([loadSettings(),loadRoster()]).catch(err=>toast(err.message));
 else{refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});}
 
@@ -109,3 +110,29 @@ $('#select-all').onclick=()=>$('#roster-names').querySelectorAll('input').forEac
 $('#select-none').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=false);
 $('#save-selection').onclick=async()=>{const b=$('#save-selection');b.disabled=true;try{const selected=[...$('#roster-names').querySelectorAll('input:checked')].map(c=>c.value);await api('roster/selection','PUT',{selected});await loadRoster();toast('统计范围已保存');}catch(e){toast(e.message);}finally{b.disabled=false;}};
 $('#refresh-layout').onclick=async()=>{const b=$('#refresh-layout');b.disabled=true;b.textContent='正在导出并同步…';try{const result=await api('layout/refresh','POST',{});$('#layout-state').textContent='上次同步：'+date(result.updated_at);toast('合并结构已更新');}catch(e){toast(e.message);}finally{b.disabled=false;b.textContent='刷新合并结构';}};
+
+
+async function loadVariables() {
+  const button = $('#refresh-variables');
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    const data = await api('variables');
+    const fragment = document.createDocumentFragment();
+    for (const row of data.rows) {
+      const tr = el('tr'), name = el('td'), value = el('td');
+      name.append(el('code', row.name, 'variable-code'));
+      if (row.value === null) value.append(el('span', '未知', 'muted'));
+      else if (row.value === '') value.append(el('span', '（空）', 'muted'));
+      else value.textContent = String(row.value);
+      tr.append(name, el('td', row.type), el('td', row.description), value);
+      fragment.append(tr);
+    }
+    $('#variable-rows').replaceChildren(fragment);
+    $('#variables-state').textContent = `共 ${data.rows.length} 个变量 · 值更新于 ${data.generated_at.replace('T', ' ')} · 每 30 秒刷新${data.query_running ? ' · 表格查询中' : ''}`;
+  } catch (error) {
+    $('#variables-state').textContent = '变量刷新失败，下方可能是旧值：' + error.message;
+    toast(error.message);
+  } finally { button.disabled = false; }
+}
+$('#refresh-variables').onclick = loadVariables;

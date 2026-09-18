@@ -13,7 +13,8 @@ import aiohttp
 from aiohttp import web
 from .core import (Store, SECRETS, API_SECRETS, doc_id, integer, now, validate_rule,
                    written_text, target_columns, task_ranges, missing_tasks,
-                   validate_source, refresh_roster)
+                   validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables)
+from .variables import build_variables
 from .tencent import TencentClient, TencentError
 
 LOG = logging.getLogger(__name__)
@@ -108,7 +109,8 @@ class Monitor:
                         if key not in seen:
                             seen.add(key)
                             unique.append(r)
-                    snapshot.update(records=unique, people_count=len({r['person'] for r in unique}),
+                    snapshot.update(rule_people={rule['id']: sorted({r['person'] for r in results if r['rule_id'] == rule['id']}) for rule in rules},
+                                    records=unique, people_count=len({r['person'] for r in unique}),
                                     last_success=snapshot['finished_at'])
                 self.store.set('snapshot', snapshot)
                 self.running = False
@@ -131,6 +133,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     if len(password) < 12 or password == 'change-this-password':
         raise RuntimeError('ADMIN_PASSWORD 必须设置为至少 12 字符的自定义密码')
     store = Store(str(Path(data_dir or os.environ.get('DATA_DIR', './data')) / 'weeklyreport.db'))
+    migrate_variables(store)
     sessions, attempts = {}, {}
     salt = secrets.token_bytes(16)
     password_hash = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
@@ -236,6 +239,9 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             roster_configured=bool(store.get('roster')),
             layout_updated_at=store.get('merge_layout',{}).get('updated_at')))
 
+    async def variables(request):
+        return web.json_response(build_variables(store, app['monitor'].running))
+
     async def check(request):
         if app['monitor'].running:
             return web.json_response({'ok': True, 'running': True}, status=202)
@@ -259,6 +265,13 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             items = [x for x in items if x['id'] != rid]
         else:
             value = validate_rule(raw) | {'id': rid or secrets.token_hex(8)}
+            previous = next((x for x in items if x['id'] == rid), {})
+            proposed = raw.get('variable_name', previous.get('variable_name'))
+            if proposed is None or proposed == '':
+                proposed = previous.get('variable_name') or allocate_variable(store, items)
+            value['variable_name'] = variable_name(proposed)
+            if any(x['id'] != rid and x['variable_name'].lower() == proposed.lower() for x in items):
+                raise ValueError('变量名已被其他规则使用（不区分大小写）')
             if not rid and len(items) >= 50:
                 raise ValueError('最多添加 50 条监听规则')
             items = [value if x['id'] == rid else x for x in items] if rid else items + [value]
@@ -361,9 +374,9 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         return web.json_response({'ok': True})
 
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
-        web.get('/manage', page), web.get('/settings', page), web.get('/static/{name}', static), web.post('/api/login', login),
+        web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check),
-        web.get('/api/rules', rules), web.post('/api/rules', rules),
+        web.get('/api/variables', variables), web.get('/api/rules', rules), web.post('/api/rules', rules),
         web.put('/api/rules/{id}', rules), web.delete('/api/rules/{id}', rules),
         web.get('/api/roster',roster), web.put('/api/roster',roster),
         web.put('/api/roster/selection',roster), web.post('/api/layout/refresh',refresh_layout),
