@@ -14,12 +14,12 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     page.on('pageerror',error=>errors.push(String(error)));
     await page.goto(base+'/mail');await page.locator('#password').fill('browser-test-password');await page.locator('#login button').click();await page.waitForURL(base+'/');
     const autoQuery=page.locator('#auto-query');
-    await autoQuery.waitFor();await page.waitForFunction(()=>!document.querySelector('#auto-query').disabled);
+    await autoQuery.waitFor();await page.locator('#auto-query:not(:disabled)').waitFor();
     assert(await autoQuery.isChecked());await autoQuery.uncheck();
-    await page.waitForFunction(()=>document.querySelector('#schedule').textContent==='自动查询已关闭');
-    await page.reload();await page.waitForFunction(()=>!document.querySelector('#auto-query').disabled);
+    await page.locator('#schedule').filter({hasText:'自动查询已关闭'}).waitFor();
+    await page.reload();await page.locator('#auto-query:not(:disabled)').waitFor();
     assert(!(await autoQuery.isChecked()));assert(!(await page.locator('#check').isDisabled()));
-    await autoQuery.check();await page.waitForFunction(()=>document.querySelector('#schedule').textContent.includes('自动检查'));
+    await autoQuery.check();await page.locator('#schedule').filter({hasText:'自动检查'}).waitFor();
     await page.locator('#nav-mail').click();await page.getByText('还没有邮件模板',{exact:true}).waitFor();
     assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表']);
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
