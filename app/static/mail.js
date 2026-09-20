@@ -2,11 +2,11 @@
 (() => {
   if (page !== 'mail') return;
   const form = $('#template-form'), subject = $('#mail-subject'), body = $('#mail-body');
-  let catalog = {rows: [], values: {}}, items = [], editing = null, focused = body, loading = false, actionBusy = false;
+  let catalog = {rows: [], values: {}}, items = [], editing = null, loading = false, actionBusy = false;
   const sentThisPage = new Set();
   const token = /{{\s*([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)\s*}}/g;
   const known = name => Object.prototype.hasOwnProperty.call(catalog.values, name);
-  const comparable = new Set(['integer','boolean','date','time','datetime']);
+  const comparable = new Set(['integer','boolean']);
   function highlight(input, mirror) {
     const text = input.value, fragment = document.createDocumentFragment();
     let start = 0;
@@ -25,11 +25,10 @@
     const names = [...text.matchAll(token)].map(m => m[1]);
     const invalid = [...new Set(names.filter(n => !known(n)))];
     const incomplete = /{{|}}/.test(text.replace(token, ''));
-    $('#mail-editor-state').textContent = invalid.length ? '未知变量：' + invalid.join('、') : incomplete ? '变量格式未完成，请使用 {{变量名}}。' : names.length ? `已识别 ${new Set(names).size} 个变量；发送时替换为当时的值。` : '';
+    $('#mail-editor-state').textContent = invalid.length ? '未知变量：' + invalid.join('、') : incomplete ? '变量格式未完成，请使用 {{变量名}}。' : '';
   }
   for (const [input, mirror] of [[subject,$('#subject-highlight')],[body,$('#body-highlight')]]) {
     input.addEventListener('input', updateEditors);
-    input.addEventListener('focus', () => focused = input);
     input.addEventListener('scroll', () => {mirror.scrollTop=input.scrollTop;mirror.scrollLeft=input.scrollLeft;});
   }
   function recipient(value = '') {
@@ -44,17 +43,11 @@
     for(const row of rows) row.querySelector('button').disabled=rows.length<=1;
   }
   $('#add-recipient').onclick=()=>recipient();
-  $('#insert-variable').onclick=()=>{
-    const name=$('#mail-variable').value;if(!name)return;
-    focused.setRangeText('{{'+name+'}}',focused.selectionStart,focused.selectionEnd,'end');focused.focus();updateEditors();
-  };
   function populateVariables() {
     const selected=$('#condition-variable').value;
-    $('#mail-variable').replaceChildren(new Option('请选择变量',''));
     $('#condition-variable').replaceChildren(new Option('请选择变量',''));
     $('#schedule-variables').replaceChildren();
     for(const row of catalog.rows) {
-      $('#mail-variable').append(new Option(row.name+' · '+row.description,row.name));
       if(comparable.has(row.type)) $('#condition-variable').append(new Option(row.name+' · '+row.description,row.name));
       if(['date','datetime'].includes(row.type)) $('#schedule-variables').append(new Option(row.description,row.name));
     }
@@ -62,10 +55,9 @@
   }
   function conditionInput() {
     const row=catalog.rows.find(r=>r.name===$('#condition-variable').value), input=$('#condition-value');
-    const types={integer:'number',date:'date',time:'time',datetime:'datetime-local'};
+    const types={integer:'number'};
     input.type=types[row?.type] || 'text';input.step=row?.type==='integer'?'1':'any';
     input.placeholder=row?.type==='boolean'?'true 或 false':'';
-    $('#condition-hint').textContent=row?.type==='boolean'?'布尔值填写 true 或 false；false 小于 true。':row?.type==='datetime'?'日期时间按北京时间比较。':row?'类型：'+row.type:'';
   }
   function scheduleFields() {
     const variable=$('#schedule-kind').value==='variable';
@@ -94,7 +86,9 @@
     $('#schedule-clock').value=item?.schedule?.clock || '00:00';
     $('#schedule-fixed').value=item?.schedule?.kind==='fixed'?item.schedule.value.slice(0,19):'';
     const variable=item?.condition?.variable || 'global.personcount';
-    if(!catalog.rows.some(r=>r.name===variable)) $('#condition-variable').append(new Option(variable+'（已不存在）',variable));
+    if(!catalog.rows.some(r=>r.name===variable && comparable.has(r.type))) {
+      const option=new Option(variable+'（请重新选择）',variable);option.disabled=true;$('#condition-variable').append(option);
+    }
     $('#condition-variable').value=variable;conditionInput();
     $('#condition-value').value=item?.condition?.value || '0';
     $('#condition-operator').value=item?.condition?.operator || 'eq';
@@ -156,10 +150,11 @@
   }
   async function load() {
     if(loading)return;loading=true;
-    try {items=await api('templates');$('#mail-load-state').textContent='自动触发每 15 秒检查一次；邮件使用最近的有效变量值。';renderList();}
+    try {items=await api('templates');$('#mail-load-state').textContent='';renderList();}
     catch(error){$('#mail-load-state').textContent='模板读取失败：'+error.message;toast(error.message);}
     finally{loading=false;}
   }
   load();setInterval(()=>{if(!document.hidden && !actionBusy)load();},5000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
 })();
+

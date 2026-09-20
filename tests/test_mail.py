@@ -48,6 +48,10 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
     def test_time_and_condition_types(self):
         for name in ['global.personlist','global.url','global.week.duration']:
             with self.assertRaises(ValueError):validate_template(auto(condition=dict(variable=name,operator='eq',value='0')),self.catalog())
+        for name, value in [('global.date','2026-09-18'), ('global.time','09:00'),
+                            ('global.lastquery','2026-09-18T09:00:00+08:00')]:
+            with self.assertRaises(ValueError):
+                validate_template(auto(condition=dict(variable=name,operator='eq',value=value)),self.catalog())
         for value in ['global.time','global.personcount','notFound']:
             with self.assertRaises(ValueError):validate_template(auto(schedule=dict(kind='variable',value=value)),self.catalog())
         with self.assertRaises(ValueError):validate_template(auto(schedule=dict(kind='fixed',value='2026-02-30T09:00')),self.catalog())
@@ -192,3 +196,4 @@ class MailWebTests(unittest.IsolatedAsyncioTestCase):
                 r=await client.post(send,json=raw|{'confirm_attempt':confirmation['confirm_attempt']},headers=headers);self.assertEqual(r.status,200)
                 r=await client.delete('/api/templates/'+item['id'],json=raw,headers=headers);self.assertEqual(r.status,200)
                 self.assertEqual(await (await client.get('/api/templates')).json(),[])
+

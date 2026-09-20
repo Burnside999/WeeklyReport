@@ -30,6 +30,7 @@ class Monitor:
         self.wake = asyncio.Event()
         self.running = False
         self.next_check = None
+        self.manual_requested = False
 
     async def check(self):
         if self.lock.locked():
@@ -116,13 +117,21 @@ class Monitor:
                                     last_success=snapshot['finished_at'])
                 self.store.set('snapshot', snapshot)
                 self.running = False
-                self.next_check = time.time() + self.store.settings()['interval_seconds']
+                self.next_check = (time.time() + self.store.settings()['interval_seconds']
+                                   if self.store.settings()['auto_query_enabled'] else None)
         return True
 
     async def loop(self):
         while True:
             self.wake.clear()
-            await self.check()
+            manual = self.manual_requested
+            self.manual_requested = False
+            if manual or self.store.settings()['auto_query_enabled']:
+                await self.check()
+            if not self.store.settings()['auto_query_enabled']:
+                self.next_check = None
+                await self.wake.wait()
+                continue
             delay = max(0, (self.next_check or time.time()) - time.time())
             try:
                 await asyncio.wait_for(self.wake.wait(), delay)
@@ -250,7 +259,8 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     async def status(request):
         m = app['monitor']
         return web.json_response(store.get('snapshot', {}) | dict(running=m.running,
-            next_check=m.next_check, interval_seconds=store.settings()['interval_seconds'],
+            next_check=m.next_check if store.settings()['auto_query_enabled'] else None,
+            auto_query_enabled=store.settings()['auto_query_enabled'], interval_seconds=store.settings()['interval_seconds'],
             configured=bool(store.get('rules', [])),
             roster_configured=bool(store.get('roster')),
             layout_updated_at=store.get('merge_layout',{}).get('updated_at')))
@@ -261,8 +271,21 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     async def check(request):
         if app['monitor'].running:
             return web.json_response({'ok': True, 'running': True}, status=202)
+        app['monitor'].manual_requested = True
         app['monitor'].wake.set()
         return web.json_response({'ok': True}, status=202)
+
+    async def automatic_query(request):
+        raw = await request.json()
+        if not isinstance(raw, dict) or type(raw.get('enabled')) is not bool:
+            raise ValueError('自动查询开关必须为布尔值')
+        s = store.settings()
+        if s['auto_query_enabled'] != raw['enabled']:
+            s['auto_query_enabled'] = raw['enabled']
+            store.set('settings', s)
+            app['monitor'].next_check = None
+            app['monitor'].wake.set()
+        return web.json_response({'auto_query_enabled': s['auto_query_enabled']})
 
     def busy():
         if app['monitor'].running or app['client'].lock.locked():
@@ -413,7 +436,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
         web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
-        web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check),
+        web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check), web.put('/api/auto-query', automatic_query),
         web.get('/api/templates', templates), web.post('/api/templates', templates),
         web.put('/api/templates/{id}', templates), web.delete('/api/templates/{id}', templates),
         web.post('/api/templates/{id}/{action}', templates),
@@ -429,3 +452,4 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     os.umask(0o077)
     web.run_app(create_app(), host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), access_log=None)
+

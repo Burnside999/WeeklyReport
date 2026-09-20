@@ -11,7 +11,7 @@ from .variables import LOCAL_TZ, build_variables
 
 TOKEN = re.compile(r'{{\s*([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)\s*}}')
 OPS = {'gt': operator.gt, 'lt': operator.lt, 'eq': operator.eq}
-COMPARABLE = {'integer', 'boolean', 'date', 'time', 'datetime'}
+COMPARABLE = {'integer', 'boolean'}
 CONFIG_KEYS = ('recipients', 'subject', 'body', 'mode', 'schedule', 'condition')
 LOG = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ def validate_template(raw, catalog):
         raise ValueError('请选择固定时间或日期变量')
     row = next((r for r in catalog['rows'] if r['name'] == condition.get('variable')), None)
     if not row or row['type'] not in COMPARABLE:
-        raise ValueError('触发变量须为整数、布尔、日期、时间或日期时间')
+        raise ValueError('触发变量须为整数或布尔值')
     if condition.get('operator') not in OPS:
         raise ValueError('关系须为大于、小于或等于')
     typed_value(row['type'], condition.get('value'))
@@ -319,3 +319,4 @@ class MailEngine:
                 await asyncio.wait_for(self.wake.wait(), 15)
             except asyncio.TimeoutError:
                 pass
+

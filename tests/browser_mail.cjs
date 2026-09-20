@@ -13,6 +13,13 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     const page=await browser.newPage({viewport:{width:390,height:844}}), errors=[];
     page.on('pageerror',error=>errors.push(String(error)));
     await page.goto(base+'/mail');await page.locator('#password').fill('browser-test-password');await page.locator('#login button').click();await page.waitForURL(base+'/');
+    const autoQuery=page.locator('#auto-query');
+    await autoQuery.waitFor();await page.waitForFunction(()=>!document.querySelector('#auto-query').disabled);
+    assert(await autoQuery.isChecked());await autoQuery.uncheck();
+    await page.waitForFunction(()=>document.querySelector('#schedule').textContent==='自动查询已关闭');
+    await page.reload();await page.waitForFunction(()=>!document.querySelector('#auto-query').disabled);
+    assert(!(await autoQuery.isChecked()));assert(!(await page.locator('#check').isDisabled()));
+    await autoQuery.check();await page.waitForFunction(()=>document.querySelector('#schedule').textContent.includes('自动检查'));
     await page.locator('#nav-mail').click();await page.getByText('还没有邮件模板',{exact:true}).waitFor();
     assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表']);
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
@@ -36,7 +43,10 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
     await page.locator('#mail-recipients input').fill('auto@example.com');await page.locator('#mail-subject').fill('自动邮件');await page.locator('#mail-body').fill('当前日期 {{global.date}}');
     await page.locator('input[name=mail_mode][value=auto]').check();await page.locator('#schedule-variable').fill('global.week.friday');await page.locator('#schedule-clock').fill('09:00');
-    assert.equal(await page.locator('#condition-variable option[value="global.personlist"]').count(),0);
+    for(const name of ['global.personlist','global.date','global.time','global.lastquery'])
+      assert.equal(await page.locator(`#condition-variable option[value="${name}"]`).count(),0);
+    assert.equal(await page.locator('#mail-variable, #insert-variable, #condition-hint').count(),0);
+    assert.equal(await page.locator('#condition-variable option[value="global.healthy"]').count(),1);
     await page.locator('#condition-variable').selectOption('global.listencount');await page.locator('#condition-value').fill('0');await page.locator('#save-template').click();await page.locator('#template-form').waitFor({state:'hidden'});
     const waiting=page.getByRole('button',{name:'等待自动触发',exact:true});await waiting.waitFor();assert(await waiting.isDisabled());
     await page.request.post(base+'/test/tick',{data:{},headers:{'X-Requested-With':'WeeklyReport'}});
@@ -46,6 +56,23 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     sent=await (await page.request.get(base+'/test/deliveries')).json();assert.equal(sent.length,4);
     await page.locator('#nav-settings').click();assert.equal(await page.locator('[name=smtp_recipient]').count(),0);
     await page.setViewportSize({width:320,height:740});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    // Long URLs/names must remain readable without horizontal scrolling at every breakpoint.
+    await page.route('**/api/variables', async route=>{
+      const response=await route.fetch(), data=await response.json();
+      data.rows.push({name:'listener'+'X'.repeat(55)+'.personlist',type:'string',description:'很长的未交名单',value:'张三、李四、'.repeat(80)});
+      data.rows.push({name:'global.testurl',type:'url',description:'文档地址',value:'https://docs.qq.com/sheet/'+'A'.repeat(180)});
+      await route.fulfill({response,json:data});
+    });
+    await page.locator('#nav-variables').click();await page.locator('#variable-rows tr').first().waitFor();
+    assert.equal(await page.locator('#variable-rows tr').filter({hasText:'global.personcount'}).locator('td').last().textContent(),'null');
+    for(const width of [320,390,600,768,1280]) {
+      await page.setViewportSize({width,height:844});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`page overflow at ${width}`);
+      assert(await page.locator('.variables-wrap').evaluate(e=>e.scrollWidth<=e.clientWidth),`table overflow at ${width}`);
+      assert(await page.locator('.variables-table td').evaluateAll(cells=>cells.every(e=>e.scrollWidth<=e.clientWidth)),`cell overflow at ${width}`);
+      if(width===390 || width===1280) await page.screenshot({path:`/tmp/variables-${width}.png`,fullPage:true});
+    }
     assert.deepEqual(errors,[]);console.log('Mobile mail editor, highlight, manual confirmation and automatic reset: PASS');
   }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(error=>{console.error(error);process.exitCode=1;});
+

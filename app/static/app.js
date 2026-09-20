@@ -6,7 +6,7 @@ for (const name of ['home', 'manage', 'mail', 'settings', 'variables']) {
   $('#nav-' + name).classList.toggle('active', page === name);
   if (page === name) $('#nav-' + name).setAttribute('aria-current', 'page');
 }
-let allRules = [], toastTimer, checking = false;
+let allRules = [], toastTimer, checking = false, togglingAuto = false, refreshVersion = 0;
 async function api(path, method = 'GET', body) {
   const response = await fetch('/api/' + path, {method, headers:{'Content-Type':'application/json','X-Requested-With':'WeeklyReport'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
   if (response.status === 401) { location.replace('/login'); throw new Error('请重新登录'); }
@@ -21,14 +21,17 @@ function date(value) { return value ? new Date(value).toLocaleString('zh-CN', {m
 function col(n) { let s=''; while(n) { n--; s=String.fromCharCode(65+n%26)+s; n=Math.floor(n/26); } return s; }
 async function refresh() {
   if(page !== 'home') return;
+  const version = ++refreshVersion;
   try {
     const s = await api('status');
+    if(version !== refreshVersion) return;
+    if(!togglingAuto) {$('#auto-query').checked=s.auto_query_enabled;$('#auto-query').disabled=false;}
     checking = s.running; $('#check').disabled = checking; $('#check').textContent = checking ? '查询中…' : '立即查询 ↻';
     $('#people').textContent = s.people_count ?? '—';
     const records = s.records || [];
     $('#record-count').textContent = s.last_success ? `${records.length} 条待填写 · ${s.rule_count || 0} 条启用规则${s.stale ? ' · 上次成功结果' : ''}` : '等待首次成功查询';
     $('#last-time').textContent = date(s.last_attempt);
-    $('#schedule').textContent = `每 ${Math.round(s.interval_seconds / 60)} 分钟自动检查${s.next_check ? ' · 下次 ' + date(s.next_check * 1000) : ''}`;
+    $('#schedule').textContent = !s.auto_query_enabled ? '自动查询已关闭' : `每 ${Math.round(s.interval_seconds / 60)} 分钟自动检查${s.next_check ? ' · 下次 ' + date(s.next_check * 1000) : ''}`;
     $('#health').textContent = checking ? '正在查询' : s.stale ? '检查异常' : s.last_success ? (s.rule_count ? '已更新' : '未设置规则') : '等待查询';
     $('#health').className = 'badge ' + (s.stale ? 'bad' : s.last_success && s.rule_count ? 'good' : '');
     $('#errors').replaceChildren(); $('#errors').hidden = !s.stale;
@@ -54,6 +57,13 @@ async function refresh() {
   } catch(err) { $('#health').textContent='连接失败'; $('#health').className='badge bad'; $('#errors').hidden=false; $('#errors').textContent='无法连接服务器，当前显示可能为旧结果。'+err.message; }
 }
 $('#check').onclick = async () => { $('#check').disabled=true; try { await api('check','POST',{}); toast('已开始查询'); await refresh(); } catch(err) {toast(err.message);} finally {$('#check').disabled=checking;} };
+$('#auto-query').onchange = async event => {
+  const toggle=event.target, enabled=toggle.checked;
+  togglingAuto=true;toggle.disabled=true;++refreshVersion;
+  try {await api('auto-query','PUT',{enabled});}
+  catch(err) {toggle.checked=!enabled;toast(err.message);}
+  finally {togglingAuto=false;toggle.disabled=false;await refresh();}
+};
 $('#logout').onclick = async () => {try {await api('logout','POST',{});location.replace('/login');}catch(err){toast(err.message);}};
 const form=$('#rule-form');
 function edit(rule) {
@@ -79,7 +89,7 @@ async function renderRules() {
     buttons.append(editButton,del);actions.append(label,buttons);card.append(actions);$('#rules-list').append(card);
   }
 }
-form.onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(form));body.enabled=form.elements.enabled.checked;const id=body.id;delete body.id;const button=form.querySelector('[type=submit]');button.disabled=true;try{await api('rules'+(id?'/'+id:''),id?'PUT':'POST',body);form.hidden=true;await renderRules();toast('规则已保存，将自动重新查询');}catch(err){toast(err.message);}finally{button.disabled=false;}};
+form.onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(form));body.enabled=form.elements.enabled.checked;const id=body.id;delete body.id;const button=form.querySelector('[type=submit]');button.disabled=true;try{await api('rules'+(id?'/'+id:''),id?'PUT':'POST',body);form.hidden=true;await renderRules();toast('规则已保存');}catch(err){toast(err.message);}finally{button.disabled=false;}};
 $('#load-sheets').onclick=async()=>{const b=$('#load-sheets');b.disabled=true;b.textContent='读取中…';try{const sheets=await api('sheets');$('#sheet-select').replaceChildren(new Option('请选择工作表',''));for(const s of sheets){const o=new Option(s.title,s.sheetId);$('#sheet-select').append(o);}toast(`已读取 ${sheets.length} 个工作表`);}catch(err){toast(err.message);}finally{b.disabled=false;b.textContent='从腾讯文档读取工作表';}};
 $('#sheet-select').onchange=e=>{if(e.target.value){form.elements.sheet_id.value=e.target.value;form.elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
 async function loadSettings(){const s=await api('settings'),f=$('#settings-form');for(const key of ['document_url','file_id','interval_seconds','timeout_seconds','client_id','open_id','smtp_host','smtp_port','smtp_security','smtp_sender','smtp_sender_name']) f.elements[key].value=s[key];for(const key of ['access_token','refresh_token','client_secret','smtp_password']) f.elements[key].value='';f.elements.clear_secrets.checked=false;f.elements.clear_smtp_password.checked=false;$('#smtp-state').textContent=s.smtp_password_configured?'发送密码已保存。':'发送密码尚未配置。';$('#access-state').textContent=s.access_token_configured?'Access Token 已保存；留空不修改。':'Access Token 尚未配置。';$('#refresh-state').textContent=s.refresh_token_configured&&s.client_secret_configured?'自动续期凭据已配置。':'配置 Refresh Token 和 Client Secret 后可自动续期。';}
@@ -122,10 +132,11 @@ async function loadVariables() {
     for (const row of data.rows) {
       const tr = el('tr'), name = el('td'), value = el('td');
       name.append(el('code', row.name, 'variable-code'));
-      if (row.value === null) value.append(el('span', '未知', 'muted'));
+      if (row.value === null) value.append(el('span', 'null', 'muted'));
       else if (row.value === '') value.append(el('span', '（空）', 'muted'));
       else value.textContent = String(row.value);
       tr.append(name, el('td', row.type), el('td', row.description), value);
+      ['变量名', '类型', '描述', '值'].forEach((label, i) => tr.children[i].dataset.label = label);
       fragment.append(tr);
     }
     $('#variable-rows').replaceChildren(fragment);
@@ -136,3 +147,4 @@ async function loadVariables() {
   } finally { button.disabled = false; }
 }
 $('#refresh-variables').onclick = loadVariables;
+

@@ -62,6 +62,8 @@ class TencentClient:
                 s['refresh_token'] = data['refresh_token']
             if data.get('user_id'):
                 s['open_id'] = data['user_id']
+            # A user can pause automatic queries while token renewal is in flight.
+            s['auto_query_enabled'] = self.store.settings()['auto_query_enabled']
             self.store.set('settings', s)
         if not s['access_token']:
             raise TencentError('请填写 Access Token，或配置 Refresh Token 与 Client Secret 自动续期')
@@ -205,3 +207,4 @@ async def download_export(url, timeout):
                         raise ValueError('导出超过 20 MiB')
                 return bytes(content)
         raise ValueError('导出重定向过多')
+

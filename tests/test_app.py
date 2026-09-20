@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from aiohttp.test_utils import TestClient, TestServer
 from app.core import Store, written_text, column, doc_id, letters, missing_tasks, validate_rule
 from app.main import Monitor, create_app
@@ -94,6 +94,39 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):await task
 
+    async def test_paused_scheduler_manual_query_and_resume(self):
+        settings = self.store.settings() | {'auto_query_enabled': False, 'interval_seconds': .02}
+        self.store.set('settings', settings)
+        original = self.m.check
+        self.m.check = AsyncMock(wraps=original)
+        task = asyncio.create_task(self.m.loop())
+        try:
+            await asyncio.sleep(.05)
+            self.m.check.assert_not_awaited()
+            self.m.wake.set()  # Rule/configuration changes cannot bypass pause.
+            await asyncio.sleep(.05)
+            self.m.check.assert_not_awaited()
+            self.m.manual_requested = True
+            self.m.wake.set()
+            await asyncio.sleep(.05)
+            self.assertEqual(self.m.check.await_count, 1)
+            self.assertIsNone(self.m.next_check)
+            self.store.set('settings', settings | {'auto_query_enabled': True})
+            self.m.wake.set()
+            await asyncio.sleep(.08)
+            self.assertGreater(self.m.check.await_count, 1)
+            self.store.set('settings', settings)
+            self.m.wake.set()
+            await asyncio.sleep(.02)
+            count = self.m.check.await_count
+            await asyncio.sleep(.06)
+            self.assertEqual(self.m.check.await_count, count)
+            self.assertIsNone(self.m.next_check)
+        finally:
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -144,6 +177,31 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.web.get('/api/status')).status,200)
         await self.web.post('/api/logout',json={},headers=self.headers)
         self.assertEqual((await self.web.get('/api/status')).status,401)
+    async def test_auto_query_api_persists_and_manual_is_independent(self):
+        endpoint = '/api/auto-query'
+        self.assertEqual((await self.web.put(endpoint,json={'enabled':False},headers=self.headers)).status,401)
+        await self.login()
+        self.assertEqual((await self.web.put(endpoint,json={'enabled':False})).status,403)
+        for value in ['false', 0, None]:
+            self.assertEqual((await self.web.put(endpoint,json={'enabled':value},headers=self.headers)).status,400)
+        self.assertTrue((await (await self.web.get('/api/status')).json())['auto_query_enabled'])
+        await self.web.put(endpoint,json={'enabled':False},headers=self.headers)
+        state = await (await self.web.get('/api/status')).json()
+        self.assertFalse(state['auto_query_enabled'])
+        self.assertIsNone(state['next_check'])
+        persisted = Store(self.tmp.name+'/weeklyreport.db')
+        try:
+            self.assertFalse(persisted.settings()['auto_query_enabled'])
+        finally:
+            persisted.close()
+        await self.web.put('/api/settings',json={'interval_seconds':600},headers=self.headers)
+        self.assertFalse(self.app['store'].settings()['auto_query_enabled'])
+        self.assertFalse(self.app['monitor'].manual_requested)
+        self.assertEqual((await self.web.post('/api/check',json={},headers=self.headers)).status,202)
+        self.assertTrue(self.app['monitor'].manual_requested)
+        await self.web.put(endpoint,json={'enabled':True},headers=self.headers)
+        self.assertTrue(self.app['store'].settings()['auto_query_enabled'])
+
     async def test_rule_crud_and_secret_redaction(self):
         await self.login()
         response=await self.web.post('/api/rules',json=rule(),headers=self.headers)
@@ -174,3 +232,4 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
 
 
 if __name__ == '__main__': unittest.main()
+

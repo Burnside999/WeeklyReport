@@ -48,21 +48,25 @@ class VariableTests(unittest.IsolatedAsyncioTestCase):
         client = FakeClient()
         monitor = Monitor(self.store, client)
         self.assertIsNone(build_variables(self.store)['values']['global.personcount'])
+        self.assertIsNone(build_variables(self.store)['values']['global.healthy'])
+        self.assertEqual(next(r for r in build_variables(self.store)['rows'] if r['name']=='global.healthy')['type'], 'integer')
         await monitor.check()
         values = build_variables(self.store)['values']
         self.assertEqual(values['global.personcount'], 1)
+        self.assertEqual(values['global.healthy'], 1)
+        self.assertIs(type(values['global.healthy']), int)
         self.assertEqual(values['One.personlist'], '张三')
         self.assertEqual(values['Two.personcount'], 1)
         self.assertEqual(len(self.store.get('snapshot')['records']), 2)
         self.assertEqual(values['One.taskcol'], 'C')
         self.assertTrue(values['One.sheeturl'].endswith('?tab=tab1'))
-        self.assertEqual(build_variables(self.store, True)['values']['global.healthy'], '查询中')
+        self.assertEqual(build_variables(self.store, True)['values']['global.healthy'], 2)
         client.fail = True
         await monitor.check()
         values = build_variables(self.store)['values']
         self.assertIsNone(values['Two.personcount'])
         self.assertIsNone(values['global.personlist'])
-        self.assertEqual(values['global.healthy'], '异常')
+        self.assertEqual(values['global.healthy'], 0)
         client.fail = False
         self.store.set('rules', [rule(variable_name='One', enabled=False), rule(id='r2',variable_name='Two',start_row=4,end_row=4)])
         await monitor.check()
@@ -106,3 +110,4 @@ class VariableWebTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await r.json())[0]['variable_name'], 'listener2')
                 data = await (await client.get('/api/variables')).json()
                 self.assertNotIn('ReportA.name', data['values'])
+

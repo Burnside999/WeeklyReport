@@ -33,10 +33,10 @@ def build_variables(store, running=False, current=None):
     url = store.settings()['document_url']
     add('global.url', 'url', '当前腾讯表格地址', url)
     people = sorted({r['person'] for r in snapshot.get('records', [])}) if valid else None
-    add('global.personcount', 'integer', '未交人数（去重；无有效结果时未知）', len(people) if people is not None else None)
+    add('global.personcount', 'integer', '未交人数（去重；无有效结果时 null）', len(people) if people is not None else None)
     add('global.personlist', 'string', '未交姓名（去重、英文逗号分隔）', ','.join(people) if people is not None else None)
-    health = '查询中' if running else '异常' if snapshot.get('stale') else '正常' if valid else '等待首次查询'
-    add('global.healthy', 'string', '系统运行情况：正常、查询中、异常、等待首次查询', health)
+    health = 2 if running else 0 if snapshot.get('stale') else 1 if valid else None
+    add('global.healthy', 'integer', '系统健康：1 正常，0 异常，2 查询中，null 未查询', health)
     last = snapshot.get('last_attempt')
     add('global.lastquery', 'datetime', '上次查询开始时间（北京时间，含失败查询）', datetime.fromisoformat(last).astimezone(LOCAL_TZ).isoformat(timespec='seconds') if last else None)
     parts = urlsplit(url)
@@ -56,8 +56,9 @@ def build_variables(store, running=False, current=None):
         names = snapshot.get('rule_people', {}).get(rule['id']) if valid and rule['enabled'] else None
         for key, kind, label, value in values:
             add(f'{prefix}.{key}', kind, label, value)
-        add(f'{prefix}.personcount', 'integer', '该规则未交人数（停用或无有效结果时未知）', len(names) if names is not None else None)
+        add(f'{prefix}.personcount', 'integer', '该规则未交人数（停用或无有效结果时 null）', len(names) if names is not None else None)
         add(f'{prefix}.personlist', 'string', '该规则未交姓名（去重、逗号分隔）', ','.join(names) if names is not None else None)
     return dict(generated_at=current.isoformat(timespec='seconds'), timezone='Asia/Shanghai',
                 query_running=running, results_available=valid,
                 rows=rows, values={r['name']: r['value'] for r in rows})
+
