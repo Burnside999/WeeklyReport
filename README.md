@@ -19,7 +19,7 @@ docker compose up -d --build
 
 公网部署请通过 Nginx/Caddy 提供 HTTPS，再设置 `COOKIE_SECURE=true`；仅通过 HTTPS 访问。若反向代理在宿主机，可设置 `BIND_ADDRESS=127.0.0.1`。直接 HTTP 访问时保持 `COOKIE_SECURE=false`，否则浏览器不会发送登录 Cookie。
 
-修改密码后运行 `docker compose up -d --force-recreate`，已有会话随进程重启失效。密码只由服务器环境变量设置，管理页面不能修改或读取密码。
+修改密码后运行 `docker compose up -d --force-recreate`，已有会话随进程重启失效。密码只由服务器环境变量设置，管理页面不能修改或读取密码。登录使用 scrypt 与恒定时间比较，不通过 SQL 验证密码；数据库使用参数绑定。登录限流在读取请求体前计数，防止并发覆盖；密码计算最多同时执行两次。会话令牌随机生成，重新登录及退出会撤销旧会话，设置响应禁止缓存。
 
 ## 腾讯文档官方 API 授权（必须配置）
 
@@ -27,13 +27,13 @@ docker compose up -d --build
 
 1. 在[腾讯文档开放平台](https://docs.qq.com/open/)创建应用，获取 Client ID / Client Secret。
 2. 按[官方 OAuth 授权流程](https://docs.qq.com/open/document/app/oauth2/)让有权访问目标表格的账号授权，获取对应的 `user_id`（Open ID）、Access Token、Refresh Token。授权及授权码兑换在腾讯平台完成；本应用设置页接收已有凭据，不提供 OAuth 回调页面。
-3. 申请 `scope.sheet.readonly`（读取表格）与 `scope.drive.exportable`（读取真实合并结构）。自动将分享链接转换为 File ID 还需 `scope.drive.file.metadata.readonly` 或转换接口文档列出的其他许可。如果已知官方 File ID，可直接填写并跳过转换接口。
+3. 申请 `scope.sheet.readonly`（读取表格）与 `scope.drive.exportable`（读取真实合并结构）。自动将分享链接转换为 File ID 还需 `scope.drive.file.metadata.readonly` 或转换接口文档列出的其他许可。File ID 由分享链接自动转换，无需手动填写。
 4. 登录本应用，打开 **设置 → 高级设置**，填写 Client ID、Open ID、Access Token 并保存。
-5. 推荐同时填写 Refresh Token 与 Client Secret，服务会按返回的 `expires_in` 提前续期并保存最新令牌。只有 Access Token 时也可使用，但过期后需要手动更新。Refresh Token 被撤销或失效时仍须重新授权。
+5. 本应用仅使用 Access Token，过期后手动更新；不再配置 Refresh Token 或 Client Secret。
 6. 在“设置 → 选择数据源”（默认折叠）中读取工作表列表，选择名单所在 Sheet、姓名列与起止行，保存读取。默认全选，可取消勾选休假同事后保存统计范围。
 7. 添加监听规则，选择实际 Sheet、责任人列、一个或多个待填列及起止行。首次检查会导出一次合并结构；填写内容仍走 V3 实时读取。
 
-密钥字段保存后不回显，留空表示保留原值。明确勾选“清除已保存的全部令牌和 Secret”才会清除。凭据保存在权限受限的 SQLite 数据库中（不是加密保险库），不要公开数据卷和备份。
+Access Token 和 SMTP 授权码明文保存在权限为 0600 的 SQLite 数据库中。登录后设置接口返回实际值，普通 `password` 输入框保存或刷新后保留内容（视觉上仍为圆点）；清空输入框再保存即删除，不提交的字段保持原值。升级移除旧 Refresh Token、Client Secret、过期时间与手动 File ID 配置。
 
 ### 使用的官方接口
 
@@ -42,9 +42,8 @@ docker compose up -d --build
 | 分享 ID 转 File ID | `GET /openapi/drive/v2/util/converter?type=2&value=...` |
 | 工作表元数据 | `GET /openapi/spreadsheet/v3/files/{fileId}` |
 | 单元格范围 | `GET /openapi/spreadsheet/v3/files/{fileId}/{sheetId}/{range}` |
-| 刷新令牌 | `GET /oauth/v2/token?grant_type=refresh_token&...` |
 
-文档：[ID 转换](https://docs.qq.com/open/document/app/openapi/v2/file/util/converter.html)、[工作表信息](https://docs.qq.com/open/document/app/openapi/v3/sheet/get/get_sheet.html)、[范围内容](https://docs.qq.com/open/document/app/openapi/v3/sheet/get/get_range.html)、[令牌刷新](https://docs.qq.com/open/document/app/oauth2/refresh_token.html)。采用官方 V3 `gridData.rows[].values[].cellValue` 数据结构；逐列按 1000 行分页，遵守每次最多 1000 行、200 列、10000 单元格的限制。
+文档：[ID 转换](https://docs.qq.com/open/document/app/openapi/v2/file/util/converter.html)、[工作表信息](https://docs.qq.com/open/document/app/openapi/v3/sheet/get/get_sheet.html)、[范围内容](https://docs.qq.com/open/document/app/openapi/v3/sheet/get/get_range.html)。采用官方 V3 `gridData.rows[].values[].cellValue` 数据结构；逐列按 1000 行分页，遵守每次最多 1000 行、200 列、10000 单元格的限制。
 
 ## 名单、任务与统计口径（新版）
 
@@ -78,7 +77,7 @@ docker compose up -d --build
 
 高级设置保留发送邮箱、发送端口、发送密码/授权码、发送名称、SMTP 服务器和 SSL/TLS / STARTTLS。接收邮箱在各模板中维护（1–5 个），升级时移除旧的全局接收邮箱及接收名称，不自动创建模板。
 
-密钥不在接口回显，留空保留、勾选清除后删除。保存 SMTP 设置本身不会发送邮件。`app/mail.py` 使用 Python 标准库 `smtplib` 在后台线程发送纯文本邮件，校验 TLS 证书，SMTP 操作超时 30 秒。SMTP 接受邮件后显示“发送成功”，不代表已进入收件箱；服务器可能继续投递或退信。
+授权码在登录后的输入框保留实际值，清空后保存即删除。保存 SMTP 设置本身不会发送邮件。`app/mail.py` 使用 Python 标准库 `smtplib` 在后台线程发送纯文本邮件，校验 TLS 证书，SMTP 操作超时 30 秒。SMTP 接受邮件后显示“发送成功”，不代表已进入收件箱；服务器可能继续投递或退信。
 
 ## 设置
 
@@ -89,11 +88,11 @@ docker compose up -d --build
 | 绑定地址 | 0.0.0.0 | `.env` 的 `BIND_ADDRESS` |
 | HTTPS Cookie | false | `.env` 的 `COOKIE_SECURE` |
 | 会话有效期 | 24 小时，最大 168 | `.env` 的 `SESSION_HOURS` |
-| 文档地址 / File ID | 预置分享链接 / 自动转换 | 设置页顶部 / 设置 → 高级设置 |
+| 文档地址 | 预置分享链接（自动转换 File ID） | 设置页顶部 |
 | 检查间隔 / 超时 | 300 秒 / 20 秒 | 设置 → 高级设置 |
 | 腾讯 API 凭据 | 未配置 | 设置 → 高级设置 |
 
-更换表格时也应更新/清空 File ID，重新配置名单数据源，并重新选择每条规则的 Sheet ID。规则不会凭 Sheet 名称自动映射至另一份文档。
+更换表格时应重新配置名单数据源，并重新选择每条规则的 Sheet ID。规则不会凭 Sheet 名称自动映射至另一份文档。
 
 ## 维护
 
@@ -130,7 +129,7 @@ node --check app/static/app.js
 node --check app/static/login.js
 ```
 
-测试覆盖鉴权、CSRF 请求校验、限流、CRUD、凭据脱敏、文本口径、多人子串匹配、名单排除、独立任务与合并边界、多列与坐标、导出配额和缓存、邮件配置不发送、令牌轮换、旧结果保留、后台调度与并发防重。`.github/workflows/ci.yml` 会进一步运行手机视口的邮件编辑与触发浏览器测试（模拟 SMTP），构建 Docker 镜像并进行容器健康检查。
+测试覆盖鉴权、CSRF 请求校验、限流、CRUD、登录后凭据回填与清空、文本口径、多人子串匹配、名单排除、独立任务与合并边界、多列与坐标、导出配额和缓存、邮件配置不发送、会话轮换、旧结果保留、后台调度与并发防重。`.github/workflows/ci.yml` 会进一步运行手机视口的邮件编辑与触发浏览器测试（模拟 SMTP），构建 Docker 镜像并进行容器健康检查。
 
 开发交付时未提供腾讯 API 凭据，无法对实际文档做授权 API 联调；接口适配依据上述官方文档，使用模拟响应验证。请配置凭据后通过“读取工作表”和“立即查询”完成真实连通性验证。
 
@@ -202,21 +201,21 @@ SMTP 不提供严格的端到端“恰好一次”保证：部分收件人拒收
 
 一次正常查询的常规调用数 `Q = I + 1 + P + C`：
 
-- `I`：未配置 File ID 时为 1（每轮转换分享链接），已配置时为 0。
+- `I`：固定为 1，每轮转换分享链接。
 - `1`：读取工作表元数据。
 - `P`：名单行数除以 1000 向上取整。
 - `C`：规则需要读取的各列分页数之和，每列每 1000 行一次。责任人列、监听列及横向合并区域左上角列均计入；同一轮规则间完全相同的 Sheet、列、起止行组合只读取一次，名单读取单独计数。
 
-每日常规调用量约为 `86400 ÷ 间隔秒数 × Q`。调度实际在查询完成后再等待间隔，因此此算法略保守。建议间隔分钟数至少为 `ceil(1440 × Q ÷ 1600)`。另计授权续期（若纳入额度）、每六小时的结构导出和进度轮询；导出次数还受单独额度限制。变量页面刷新、邮件 15 秒触发检查只读取本地数据，不消耗腾讯 API 调用。
+每日常规调用量约为 `86400 ÷ 间隔秒数 × Q`。调度实际在查询完成后再等待间隔，因此此算法略保守。建议间隔分钟数至少为 `ceil(1440 × Q ÷ 1600)`。另计每六小时的结构导出和进度轮询；导出次数还受单独额度限制。变量页面刷新、邮件 15 秒触发检查只读取本地数据，不消耗腾讯 API 调用。
 
 例如名单不超过 1000 行，每条规则不超过 1000 行、1 个责任人列和 1 个不同监听列，规则间没有可复用范围且无额外合并锚点列：
 
-| 规则数 | 未配置 File ID：每轮 / 每5分钟的日调用量 | 已配置 File ID：每轮 / 每5分钟的日调用量 | 建议间隔（未配置 / 已配置） |
-| --- | --- | --- | --- |
-| 1 | 5 / 1440 | 4 / 1152 | 5 / 5 分钟 |
-| 2 | 7 / 2016 | 6 / 1728 | 10 / 10 分钟 |
-| 3 | 9 / 2592 | 8 / 2304 | 10 / 10 分钟 |
-| 5 | 13 / 3744 | 12 / 3456 | 15 / 15 分钟 |
-| 10 | 23 / 6624 | 22 / 6336 | 30 / 30 分钟 |
+| 规则数 | 每轮 / 每5分钟的日调用量 | 建议间隔 |
+| --- | --- | --- |
+| 1 | 5 / 1440 | 5 分钟 |
+| 2 | 7 / 2016 | 10 分钟 |
+| 3 | 9 / 2592 | 10 分钟 |
+| 5 | 13 / 3744 | 15 分钟 |
+| 10 | 23 / 6624 | 30 分钟 |
 
 监听多列、超过 1000 行或横向合并时，应按实际 `Q` 重新计算。间隔在高级设置中调整；升级不会覆盖现有值。

@@ -6,11 +6,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 DEFAULT_URL = 'https://docs.qq.com/sheet/DY3hoUWtYVGJOR1lz'
-API_SECRETS = ('access_token', 'refresh_token', 'client_secret')
-SECRETS = (*API_SECRETS, 'smtp_password')
-DEFAULTS = dict(document_url=DEFAULT_URL, file_id='', interval_seconds=300, auto_query_enabled=True,
+DEFAULTS = dict(document_url=DEFAULT_URL, interval_seconds=300, auto_query_enabled=True,
                 timeout_seconds=20, client_id='', open_id='', access_token='',
-                refresh_token='', client_secret='', token_expires_at=0,
                 smtp_host='', smtp_port=465, smtp_security='ssl', smtp_sender='',
                 smtp_password='', smtp_sender_name='')
 

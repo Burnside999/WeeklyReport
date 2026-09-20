@@ -11,7 +11,7 @@ from pathlib import Path
 
 import aiohttp
 from aiohttp import web
-from .core import (Store, SECRETS, API_SECRETS, doc_id, integer, now, validate_rule,
+from .core import (Store, doc_id, integer, now, validate_rule,
                    written_text, target_columns, task_ranges, missing_tasks,
                    validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables)
 from .variables import build_variables
@@ -148,10 +148,14 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     settings_data = store.settings()
     settings_data.pop("smtp_recipient", None)
     settings_data.pop("smtp_recipient_name", None)
+    for removed in ('refresh_token', 'client_secret', 'token_expires_at', 'file_id'):
+        settings_data.pop(removed, None)
     store.set("settings", settings_data)
     sessions, attempts = {}, {}
+    login_slots = asyncio.Semaphore(2)
     salt = secrets.token_bytes(16)
-    password_hash = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
+    # Fixed-length prehash avoids HMAC's trailing-NUL password equivalence.
+    password_hash = hashlib.scrypt(hashlib.sha256(password.encode()).digest(), salt=salt, n=16384, r=8, p=1)
     cookie_secure = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
     session_hours = integer(os.environ.get('SESSION_HOURS', '24'), 1, 168, '会话时长')
 
@@ -168,9 +172,11 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             public = request.path in ('/login', '/api/login', '/healthz', '/static/style.css', '/static/login.js')
             if not public and not authenticated:
                 if request.path.startswith('/api/'):
-                    return web.json_response({'error': '请先输入访问密码'}, status=401)
-                raise web.HTTPFound('/login')
-            response = await handler(request)
+                    response = web.json_response({'error': '请先输入访问密码'}, status=401)
+                else:
+                    raise web.HTTPFound('/login')
+            else:
+                response = await handler(request)
         except (ValueError, TypeError, KeyError) as exc:
             response = web.json_response({'error': str(exc)[:200]}, status=400)
         except TemplateConflict as exc:
@@ -218,12 +224,20 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         count, since = attempts.get(ip, (0, current))
         if count >= 10:
             return web.json_response({'error': '尝试次数过多，请 15 分钟后再试'}, status=429)
+        # Reserve before reading the body: awaiting JSON must not allow concurrent
+        # requests to overwrite the same attempt counter.
+        attempts[ip] = (count + 1, since)
         raw = await request.json()
+        if not isinstance(raw, dict):
+            raise ValueError('密码格式错误')
         supplied = raw.get('password', '')
         if not isinstance(supplied, str) or len(supplied) > 1024:
             raise ValueError('密码格式错误')
-        attempts[ip] = (count + 1, since)
-        candidate = await asyncio.to_thread(hashlib.scrypt, supplied.encode(), salt=salt, n=16384, r=8, p=1)
+        if login_slots.locked():
+            return web.json_response({'error': '登录请求繁忙，请稍后重试'}, status=429)
+        async with login_slots:
+            candidate = await asyncio.to_thread(hashlib.scrypt, hashlib.sha256(supplied.encode()).digest(),
+                                               salt=salt, n=16384, r=8, p=1)
         if not hmac.compare_digest(candidate, password_hash):
             return web.json_response({'error': '访问密码不正确'}, status=401)
         attempts.pop(ip, None)
@@ -232,6 +246,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
                 del sessions[key]
         if len(sessions) >= 1000:
             sessions.pop(next(iter(sessions)))
+        sessions.pop(request.cookies.get('wr_session', ''), None)
         token = secrets.token_urlsafe(32)
         sessions[token] = current + session_hours * 3600
         response = web.json_response({'ok': True})
@@ -327,24 +342,21 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     async def settings(request):
         s = store.settings()
         if request.method == 'GET':
-            return web.json_response({k: v for k, v in s.items() if k not in SECRETS} |
-                                     {k + '_configured': bool(s[k]) for k in SECRETS})
+            # Only authenticated settings requests may read stored credentials.
+            return web.json_response(s)
         busy()
         app['mail_engine'].ensure_idle()
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('设置格式错误')
-        for k in ('document_url', 'file_id', 'client_id', 'open_id',
-                  'smtp_host', 'smtp_sender', 'smtp_sender_name', 'smtp_security', *SECRETS):
+        for k in ('document_url', 'client_id', 'open_id',
+                  'smtp_host', 'smtp_sender', 'smtp_sender_name', 'smtp_security', 'access_token', 'smtp_password'):
             if k in raw:
                 if not isinstance(raw[k], str) or len(raw[k]) > 4096 or '\n' in raw[k] or '\r' in raw[k]:
                     raise ValueError('设置项格式错误')
-                # Empty secret inputs mean keep; clear_secrets explicitly removes them.
-                if k not in SECRETS or raw[k].strip():
-                    s[k] = raw[k].strip()
+                # Missing fields are preserved; explicitly empty fields are cleared.
+                s[k] = raw[k].strip()
         doc_id(s['document_url'])
-        if s['file_id'] and not re.fullmatch(r'[A-Za-z0-9_$-]{1,200}', s['file_id']):
-            raise ValueError('File ID 格式错误')
         s['interval_seconds'] = integer(raw.get('interval_seconds', s['interval_seconds']), 60, 86400, '检查间隔（秒）')
         s['timeout_seconds'] = integer(raw.get('timeout_seconds', s['timeout_seconds']), 5, 120, '请求超时（秒）')
         s['smtp_port'] = integer(raw.get('smtp_port',s['smtp_port']),1,65535,'发送端口')
@@ -354,14 +366,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             email_address(s['smtp_sender'])
         if s['smtp_host'] and not re.fullmatch(r'[a-zA-Z0-9.-]+',s['smtp_host']):
             raise ValueError('SMTP 服务器请填写主机名，不含协议和端口')
-        if raw.get('clear_smtp_password') is True:
-            s['smtp_password'] = ''
-        if raw.get('clear_secrets') is True:
-            for k in API_SECRETS:
-                s[k] = ''
-        if any(raw.get(k) for k in (*API_SECRETS, 'client_id', 'open_id')):
-            s['token_expires_at'] = 0
-        if (s['document_url'],s['file_id']) != (store.settings()['document_url'],store.settings()['file_id']):
+        if s['document_url'] != store.settings()['document_url']:
             store.set('roster',None)
             store.set('merge_layout',{})
         store.set('settings', s)
@@ -452,4 +457,3 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     os.umask(0o077)
     web.run_app(create_app(), host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), access_log=None)
-

@@ -43,6 +43,14 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
     await page.locator('#mail-recipients input').fill('auto@example.com');await page.locator('#mail-subject').fill('自动邮件');await page.locator('#mail-body').fill('当前日期 {{global.date}}');
     await page.locator('input[name=mail_mode][value=auto]').check();await page.locator('#schedule-variable').fill('global.week.friday');await page.locator('#schedule-clock').fill('09:00');
+    for(const width of [320,390,600,1280]) {
+      await page.setViewportSize({width,height:844});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`mail form overflow at ${width}`);
+      assert(await page.locator('.trigger-mode input').evaluateAll(inputs=>inputs.every(e=>{
+        const r=e.getBoundingClientRect();return r.width===18 && r.height===18;
+      })),`radio geometry at ${width}`);
+    }
+    await page.setViewportSize({width:390,height:844});
     for(const name of ['global.personlist','global.date','global.time','global.lastquery'])
       assert.equal(await page.locator(`#condition-variable option[value="${name}"]`).count(),0);
     assert.equal(await page.locator('#mail-variable, #insert-variable, #condition-hint').count(),0);
@@ -55,7 +63,37 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.request.post(base+'/test/tick',{data:{},headers:{'X-Requested-With':'WeeklyReport'}});await reset.waitFor({timeout:10000});
     sent=await (await page.request.get(base+'/test/deliveries')).json();assert.equal(sent.length,4);
     await page.locator('#nav-settings').click();assert.equal(await page.locator('[name=smtp_recipient]').count(),0);
-    await page.setViewportSize({width:320,height:740});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.locator('#settings details.advanced summary').click();
+    await page.locator('#settings details:not(.advanced) summary').click();
+    assert.equal(await page.locator('[name=file_id],[name=refresh_token],[name=client_secret],[name=clear_secrets],[name=clear_smtp_password]').count(),0);
+    await page.locator('[name=access_token]').fill('ui-test-token');
+    await page.locator('[name=smtp_password]').fill('ui-test-password');
+    await page.getByRole('button',{name:'保存高级设置',exact:true}).click();
+    await page.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
+    await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/settings')),page.reload()]);
+    await page.locator('[name=access_token]').waitFor({state:'attached'});
+    await page.locator('#settings details.advanced summary').click();
+    await page.locator('#settings details:not(.advanced) summary').click();
+    assert.equal(await page.locator('[name=access_token]').inputValue(),'ui-test-token');
+    assert.equal(await page.locator('[name=smtp_password]').inputValue(),'ui-test-password');
+    assert.equal(await page.locator('[name=access_token]').getAttribute('type'),'password');
+    for(const width of [320,390,600,768,1280]) {
+      await page.setViewportSize({width,height:844});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`settings overflow at ${width}`);
+      assert(await page.locator('#settings input,#settings select').evaluateAll(inputs=>inputs.every(e=>{
+        const r=e.getBoundingClientRect();return !r.width || (r.left>=0 && r.right<=innerWidth);
+      })),`settings controls overflow at ${width}`);
+      assert(await page.locator('#settings .panel').first().evaluate(e=>{
+        const input=e.querySelector('input').getBoundingClientRect(), button=e.querySelector('button').getBoundingClientRect();
+        return button.top-input.bottom>=16;
+      }),`save button spacing at ${width}`);
+    }
+    await page.locator('[name=access_token]').fill('');
+    await page.locator('[name=smtp_password]').fill('');
+    await page.getByRole('button',{name:'保存高级设置',exact:true}).click();
+    await page.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
+    const cleared=await (await page.request.get(base+'/api/settings')).json();
+    assert.equal(cleared.access_token,'');assert.equal(cleared.smtp_password,'');
     // Long URLs/names must remain readable without horizontal scrolling at every breakpoint.
     await page.route('**/api/variables', async route=>{
       const response=await route.fetch(), data=await response.json();
@@ -75,4 +113,3 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     assert.deepEqual(errors,[]);console.log('Mobile mail editor, highlight, manual confirmation and automatic reset: PASS');
   }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(error=>{console.error(error);process.exitCode=1;});
-

@@ -112,7 +112,7 @@ class FeatureWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await r.json())['excluded'],['张三','李四'])
         r=await self.web.put('/api/roster/selection',json={'selected':['不在名单']},headers=self.headers)
         self.assertEqual(r.status,400)
-    async def test_smtp_password_never_echoed_and_no_delivery(self):
+    async def test_smtp_password_editing_and_no_delivery(self):
         settings=dict(smtp_host='smtp.example.com',smtp_sender='from@example.com',smtp_port=465,
                       smtp_password='secret-app-password',smtp_sender_name='发送人',
                       smtp_recipient='to@example.com',smtp_recipient_name='接收人')
@@ -120,15 +120,15 @@ class FeatureWebTests(unittest.IsolatedAsyncioTestCase):
             r=await self.web.put('/api/settings',json=settings,headers=self.headers)
             self.assertEqual(r.status,200)
             r=await self.web.get('/api/settings');data=await r.json()
-            self.assertNotIn('smtp_password',data);self.assertTrue(data['smtp_password_configured'])
+            self.assertEqual(data['smtp_password'],'secret-app-password')
             config=SMTPConfig.from_settings(self.app['store'].settings())
             self.assertNotIn('secret-app-password',repr(config))
             self.assertNotIn('smtp_recipient', data)
             self.assertNotIn('smtp_recipient_name', data)
             smtp.assert_not_called();ssl.assert_not_called()
-        await self.web.put('/api/settings',json={'smtp_password':''},headers=self.headers)
+        await self.web.put('/api/settings',json={'smtp_sender_name':'新名称'},headers=self.headers)
         self.assertEqual(self.app['store'].settings()['smtp_password'],'secret-app-password')
-        await self.web.put('/api/settings',json={'clear_smtp_password':True},headers=self.headers)
+        await self.web.put('/api/settings',json={'smtp_password':''},headers=self.headers)
         self.assertEqual(self.app['store'].settings()['smtp_password'],'')
     async def test_roster_persists_and_document_change_resets_source(self):
         source={'sheet_id':'x','column':'A','start_row':1,'end_row':2}
@@ -141,3 +141,4 @@ class FeatureWebTests(unittest.IsolatedAsyncioTestCase):
         for data in ({'smtp_port':0},{'smtp_sender':'invalid'},{'smtp_sender_name':'bad\r\nHeader: injected'}):
             r=await self.web.put('/api/settings',json=data,headers=self.headers)
             self.assertEqual(r.status,400)
+

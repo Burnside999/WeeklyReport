@@ -51,32 +51,16 @@ class TencentClient:
         s = self.store.settings()
         if not s['client_id'] or not s['open_id']:
             raise TencentError('请先在设置 → 高级设置中配置腾讯文档 Client ID 和 Open ID')
-        if s['refresh_token'] and s['client_secret'] and (not s['access_token'] or s['token_expires_at'] < time.time() + 120):
-            data = await self.request('/oauth/v2/token', dict(client_id=s['client_id'],
-                client_secret=s['client_secret'], grant_type='refresh_token', refresh_token=s['refresh_token']))
-            if not data.get('access_token'):
-                raise TencentError('令牌续期失败，请重新授权并更新 Refresh Token')
-            s.update(access_token=data['access_token'],
-                     token_expires_at=time.time() + int(data.get('expires_in', 3600)))
-            if data.get('refresh_token'):
-                s['refresh_token'] = data['refresh_token']
-            if data.get('user_id'):
-                s['open_id'] = data['user_id']
-            # A user can pause automatic queries while token renewal is in flight.
-            s['auto_query_enabled'] = self.store.settings()['auto_query_enabled']
-            self.store.set('settings', s)
         if not s['access_token']:
-            raise TencentError('请填写 Access Token，或配置 Refresh Token 与 Client Secret 自动续期')
+            raise TencentError('请在设置中填写 Access Token')
         return {'Access-Token': s['access_token'], 'Client-Id': s['client_id'], 'Open-Id': s['open_id']}
 
     async def file_id(self, headers):
         s = self.store.settings()
-        if s['file_id']:
-            return s['file_id']
         data = await self.request('/openapi/drive/v2/util/converter',
                                   dict(type=2, value=doc_id(s['document_url'])), headers)
         if not isinstance(data.get('fileID'), str) or not data['fileID']:
-            raise TencentError('无法转换文档 ID；检查 drive 元数据只读权限或手动填写 File ID')
+            raise TencentError('无法转换文档 ID；检查 drive 元数据只读权限')
         return data['fileID']
 
     async def sheets(self):
