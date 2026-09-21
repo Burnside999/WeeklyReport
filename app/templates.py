@@ -74,11 +74,13 @@ def check_syntax(raw, catalog):
             errors.append(dict(field=field, message='模板内容格式错误或过长', line=1, column=1))
             continue
         try:
-            tokens[field] = [dict(start=len(text[:t['start']].encode('utf-16-le', errors='surrogatepass')) // 2,
-                                 end=len(text[:t['end']].encode('utf-16-le', errors='surrogatepass')) // 2)
-                             for t in Program(text, catalog).tokens]
+            spans = Program(text, catalog).tokens
         except TemplateSyntaxError as exc:
+            spans = getattr(exc, 'tokens', [])
             errors.append(dict(field=field, **exc.detail()))
+        tokens[field] = [dict(start=len(text[:t['start']].encode('utf-16-le', errors='surrogatepass')) // 2,
+                             end=len(text[:t['end']].encode('utf-16-le', errors='surrogatepass')) // 2)
+                         for t in spans]
     return dict(syntax_errors=errors, tokens=tokens)
 
 

@@ -3,9 +3,10 @@ import json
 import tempfile
 import unittest
 from unittest.mock import patch, AsyncMock
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestServer
+from support import TestClient, create_app, scoped_store
 from app.core import Store, written_text, column, doc_id, letters, missing_tasks, validate_rule
-from app.main import Monitor, create_app
+from app.main import Monitor
 from app.tencent import TencentClient, TencentError
 
 
@@ -162,11 +163,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.headers={'X-Requested-With':'WeeklyReport'}
     async def asyncTearDown(self):await self.web.close();self.tmp.cleanup()
     async def login(self):
-        return await self.web.post('/api/login',json={'password':'test-password-12345'},headers=self.headers)
+        return await self.web.post('/api/login',json={'username':'admin','password':'test-password-12345'},headers=self.headers)
     async def test_auth_gate_csrf_logout(self):
         self.assertEqual((await self.web.get('/api/status')).status,401)
         self.assertEqual((await self.web.get('/manage',allow_redirects=False)).status,302)
-        self.assertEqual((await self.web.post('/api/login',json={'password':'test-password-12345'})).status,403)
+        self.assertEqual((await self.web.post('/api/login',json={'username':'admin','password':'test-password-12345'})).status,403)
         response=await self.login();self.assertEqual(response.status,200)
         self.assertTrue(response.cookies['wr_session']['httponly'])
         self.assertEqual(response.cookies['wr_session']['samesite'],'Strict')
@@ -187,7 +188,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(state['next_check'])
         persisted = Store(self.tmp.name+'/weeklyreport.db')
         try:
-            self.assertFalse(persisted.settings()['auto_query_enabled'])
+            self.assertFalse(scoped_store(persisted).settings()['auto_query_enabled'])
         finally:
             persisted.close()
         await self.web.put('/api/settings',json={'interval_seconds':600},headers=self.headers)
@@ -215,7 +216,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await response.json(),[])
     async def test_rate_limit_and_health(self):
         for _ in range(10):
-            response=await self.web.post('/api/login',json={'password':'bad'},headers=self.headers)
+            response=await self.web.post('/api/login',json={'username':'admin','password':'bad'},headers=self.headers)
             self.assertEqual(response.status,401)
         self.assertEqual((await self.login()).status,429)
         self.assertEqual((await self.web.get('/healthz')).status,200)
@@ -229,18 +230,19 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_injection_and_malformed_login_cannot_authenticate(self):
         for password in ["' OR 1=1 --", "admin' UNION SELECT 1--", 'test-password-12345\x00']:
-            response = await self.web.post('/api/login', json={'password':password}, headers=self.headers)
+            response = await self.web.post('/api/login', json={'username':'admin','password':password}, headers=self.headers)
             self.assertEqual(response.status, 401)
             self.assertNotIn('wr_session', response.cookies)
-        for raw in [[], None, {'password': {'$ne': None}}, {'password': 'x'*1025}]:
+        for raw in [[], None, {'username':'admin','password': {'$ne': None}}, {'username':'admin','password': 'x'*1025}]:
             response = await self.web.post('/api/login', data=json.dumps(raw),
                 headers=self.headers | {'Content-Type':'application/json'})
             self.assertEqual(response.status, 400)
         self.assertEqual((await self.web.get('/api/settings')).status, 401)
 
     async def test_settings_require_valid_session_and_logout_revokes_it(self):
-        self.app['store'].set('settings', self.app['store'].settings() |
-            {'access_token':'private-token', 'smtp_password':'private-password'})
+        uid=self.app['store'].owner_id
+        self.app['accounts'].root.set('credentials:'+uid,{'client_id':'client','open_id':'open','access_token':'private-token'})
+        self.app['accounts'].root.set('smtp',{'smtp_password':'private-password'})
         for path in ['/api/settings', '/api/variables', '/api/../api/settings']:
             response = await self.web.get(path, headers={'Cookie':'wr_session=forged'})
             self.assertEqual(response.status, 401)
@@ -264,10 +266,10 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(web.Request, 'json', delayed_json):
             for _ in range(5):
                 responses = await asyncio.gather(*[
-                    self.web.post('/api/login', json={'password':'wrong'}, headers=self.headers)
+                    self.web.post('/api/login', json={'username':'admin','password':'wrong'}, headers=self.headers)
                     for _ in range(2)])
                 self.assertTrue(all(r.status == 401 for r in responses))
-            response = await self.web.post('/api/login', json={'password':'test-password-12345'},
+            response = await self.web.post('/api/login', json={'username':'admin','password':'test-password-12345'},
                 headers=self.headers | {'X-Forwarded-For':'203.0.113.42', 'X-Real-IP':'203.0.113.42'})
             self.assertEqual(response.status, 429)
 
@@ -275,13 +277,15 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login()
         removed = dict(refresh_token='old', client_secret='old', file_id='old', token_expires_at=1)
         response = await self.web.put('/api/settings', json=removed |
-            {'access_token':'persisted-token', 'smtp_password':'persisted-password'}, headers=self.headers)
+            {'access_token':'persisted-token'}, headers=self.headers)
         self.assertEqual(response.status, 200)
+        smtp_response=await self.web.put('/api/admin/smtp',json={'smtp_password':'persisted-password'},headers=self.headers)
+        self.assertEqual(smtp_response.status,200)
         persisted = Store(self.tmp.name+'/weeklyreport.db')
         try:
-            self.assertEqual(persisted.settings()['access_token'], 'persisted-token')
-            self.assertEqual(persisted.settings()['smtp_password'], 'persisted-password')
-            self.assertTrue(set(removed).isdisjoint(persisted.settings()))
+            self.assertEqual(scoped_store(persisted).settings()['access_token'], 'persisted-token')
+            self.assertEqual(scoped_store(persisted).settings()['smtp_password'], 'persisted-password')
+            self.assertTrue(set(removed).isdisjoint(scoped_store(persisted).settings()))
         finally:
             persisted.close()
         self.assertEqual((await self.web.put('/api/settings', json={'access_token':'bypass'})).status, 403)

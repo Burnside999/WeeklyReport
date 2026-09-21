@@ -235,7 +235,9 @@ class Program:
                 stack[-1][0].append(('text', source[pos:start]))
             opener = match[0]
             def fail(message, offset=start):
-                raise TemplateSyntaxError(message, source, offset)
+                error = TemplateSyntaxError(message, source, offset)
+                error.tokens = self.tokens.copy()
+                raise error
             if opener not in ('{{', '{%'):
                 fail('多余的结束标签')
             close = '}}' if opener == '{{' else '%}'
@@ -290,7 +292,9 @@ class Program:
                 stack.append((children, local))
             pos = end + 2
         if len(stack) != 1:
-            raise TemplateSyntaxError('缺少 endfor', source, len(source))
+            error = TemplateSyntaxError('缺少 endfor', source, len(source))
+            error.tokens = self.tokens.copy()
+            raise error
 
     def render(self):
         output = []

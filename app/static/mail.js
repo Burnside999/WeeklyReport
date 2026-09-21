@@ -1,24 +1,37 @@
 'use strict';
-(() => {
+(async () => {
+  const workspace=await workspaceReady;
+  if(!workspace?.document)return;
   if (page !== 'mail') return;
   const form = $('#template-form'), subject = $('#mail-subject'), body = $('#mail-body');
   let catalog = {rows: [], values: {}}, items = [], editing = null, loading = false, actionBusy = false;
   const sentThisPage = new Set();
   const token = /{{\s*([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*)\s*}}/g;
-  let validationTimer, validationVersion = 0, validTokens = {};
-  const known = name => Object.prototype.hasOwnProperty.call(catalog.values, name);
+  let validationTimer, validationVersion = 0, validTokens = {}, validatedText = {};
   const comparable = new Set(['integer','boolean']);
   function highlight(input, mirror) {
-    const text = input.value, fragment = document.createDocumentFragment();
-    let start = 0;
-    for (const match of text.matchAll(token)) {
-      fragment.append(document.createTextNode(text.slice(start, match.index)));
-      fragment.append(el('span', match[0], (known(match[1]) || validTokens[input.id]?.has(match.index)) ? 'valid-variable' : 'invalid-variable'));
-      start = match.index + match[0].length;
+    const text=input.value, fragment=document.createDocumentFragment();
+    let start=0;
+    for(const match of text.matchAll(/{{[\s\S]*?}}|{%[\s\S]*?%}/g)) {
+      fragment.append(document.createTextNode(text.slice(start,match.index)));
+      if(match[0].startsWith('{{')) {
+        const checked=validatedText[input.id]===text;
+        const cls=checked?(validTokens[input.id]?.has(match.index)?'valid-variable':'invalid-variable'):'pending-variable';
+        fragment.append(el('span',match[0],cls));
+      } else {
+        const wrapper=el('span',undefined,'control-statement');let offset=0;
+        const lex=/{%|%}|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b(?:for|in|with|endfor|and|or)\b|\b(?:true|false)\b|-?\d+(?:\.\d+)?|[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*/g;
+        for(const part of match[0].matchAll(lex)) {
+          wrapper.append(document.createTextNode(match[0].slice(offset,part.index)));
+          const value=part[0], cls=/^(for|in|with|endfor|and|or)$/.test(value)?'syntax-keyword':/^(true|false|["'\d-])/.test(value)?'syntax-literal':value==='{%' || value==='%}'?'syntax-delimiter':'syntax-path';
+          wrapper.append(el('span',value,cls));offset=part.index+value.length;
+        }
+        wrapper.append(document.createTextNode(match[0].slice(offset)));fragment.append(wrapper);
+      }
+      start=match.index+match[0].length;
     }
-    fragment.append(document.createTextNode(text.slice(start) + '\n'));
-    mirror.replaceChildren(fragment);
-    mirror.scrollTop = input.scrollTop; mirror.scrollLeft = input.scrollLeft;
+    fragment.append(document.createTextNode(text.slice(start)+'\n'));mirror.replaceChildren(fragment);
+    mirror.scrollTop=input.scrollTop;mirror.scrollLeft=input.scrollLeft;
   }
   function errorText(errors) {
     return errors.map(e=>`${{subject:'标题',body:'正文',condition:'触发规则'}[e.field] || ''} 第 ${e.line} 行，第 ${e.column} 列：${e.message}`).join('\n');
@@ -27,7 +40,7 @@
     highlight(subject, $('#subject-highlight')); highlight(body, $('#body-highlight'));
   }
   function updateEditors() {
-    validTokens = {};paintEditors();
+    paintEditors();
     clearTimeout(validationTimer);
     const version = ++validationVersion;
     validationTimer = setTimeout(()=>validateEditors(version),250);
@@ -37,6 +50,7 @@
     try {
       const result=await api('templates/validate','POST',{subject:subjectText,body:bodyText});
       if(version!==validationVersion || subjectText!==subject.value || bodyText!==body.value || form.hidden)return;
+      validatedText={'mail-subject':subjectText,'mail-body':bodyText};
       validTokens={'mail-subject':new Set((result.tokens.subject || []).map(t=>t.start)),
         'mail-body':new Set((result.tokens.body || []).map(t=>t.start))};
       const invalid=result.syntax_errors.length>0, state=$('#mail-editor-state');
@@ -184,5 +198,5 @@
   }
   load();setInterval(()=>{if(!document.hidden && !actionBusy)load();},5000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
-})();
+})().catch(error=>toast(error.message));
 

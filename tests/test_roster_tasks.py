@@ -4,11 +4,12 @@ import tempfile
 import unittest
 import zipfile
 from unittest.mock import patch
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestServer
+from support import TestClient, create_app, scoped_store
 from app.core import (missing_tasks, validate_rule, validate_source, refresh_roster,
                       written_text, Store, colleague_name, migrate_roster)
 from app.merge_layout import parse_layout
-from app.main import create_app, Monitor
+from app.main import Monitor
 from app.mail import SMTPConfig, SMTPMailer
 from app.tencent import TencentClient, TencentError, download_export
 from test_app import rule, cell, FakeClient
@@ -133,7 +134,7 @@ class FeatureWebTests(unittest.IsolatedAsyncioTestCase):
         self.tmp=tempfile.TemporaryDirectory();self.app=create_app(self.tmp.name,'test-password-12345',False)
         self.web=TestClient(TestServer(self.app));await self.web.start_server()
         self.headers={'X-Requested-With':'WeeklyReport'}
-        await self.web.post('/api/login',json={'password':'test-password-12345'},headers=self.headers)
+        await self.web.post('/api/login',json={'username':'admin','password':'test-password-12345'},headers=self.headers)
         async def roster(source): return ['张三','李四'],source
         self.app['client'].roster=roster
     async def asyncTearDown(self):await self.web.close();self.tmp.cleanup()
@@ -148,30 +149,30 @@ class FeatureWebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.status,400)
     async def test_smtp_password_editing_and_no_delivery(self):
         settings=dict(smtp_host='smtp.example.com',smtp_sender='from@example.com',smtp_port=465,
-                      smtp_password='secret-app-password',smtp_sender_name='发送人',
-                      smtp_recipient='to@example.com',smtp_recipient_name='接收人')
+                      smtp_password='secret-app-password',smtp_sender_name='发送人')
         with patch('smtplib.SMTP') as smtp,patch('smtplib.SMTP_SSL') as ssl:
-            r=await self.web.put('/api/settings',json=settings,headers=self.headers)
+            r=await self.web.put('/api/admin/smtp',json=settings,headers=self.headers)
             self.assertEqual(r.status,200)
-            r=await self.web.get('/api/settings');data=await r.json()
+            r=await self.web.get('/api/admin/smtp');data=await r.json()
             self.assertEqual(data['smtp_password'],'secret-app-password')
             config=SMTPConfig.from_settings(self.app['store'].settings())
             self.assertNotIn('secret-app-password',repr(config))
             self.assertNotIn('smtp_recipient', data)
             self.assertNotIn('smtp_recipient_name', data)
             smtp.assert_not_called();ssl.assert_not_called()
-        await self.web.put('/api/settings',json={'smtp_sender_name':'新名称'},headers=self.headers)
+        await self.web.put('/api/admin/smtp',json={'smtp_sender_name':'新名称'},headers=self.headers)
         self.assertEqual(self.app['store'].settings()['smtp_password'],'secret-app-password')
-        await self.web.put('/api/settings',json={'smtp_password':''},headers=self.headers)
+        await self.web.put('/api/admin/smtp',json={'smtp_password':''},headers=self.headers)
         self.assertEqual(self.app['store'].settings()['smtp_password'],'')
-    async def test_roster_persists_and_document_change_resets_source(self):
+    async def test_roster_persists_and_document_url_is_immutable(self):
         source={'sheet_id':'x','column':'A','start_row':1,'end_row':2}
         await self.web.put('/api/roster',json=source,headers=self.headers)
         second=Store(self.tmp.name+'/weeklyreport.db')
-        self.assertEqual(second.get('roster')['names'],['张三','李四']);second.close()
-        await self.web.put('/api/settings',json={'document_url':'https://docs.qq.com/sheet/DNEW'},headers=self.headers)
-        self.assertEqual(await (await self.web.get('/api/roster')).json(),{})
+        self.assertEqual(scoped_store(second).get('roster')['names'],['张三','李四']);second.close()
+        response=await self.web.put('/api/settings',json={'document_url':'https://docs.qq.com/sheet/DNEW'},headers=self.headers)
+        self.assertEqual(response.status,400)
+        self.assertEqual((await (await self.web.get('/api/roster')).json())['names'],['张三','李四'])
     async def test_invalid_smtp_config(self):
         for data in ({'smtp_port':0},{'smtp_sender':'invalid'},{'smtp_sender_name':'bad\r\nHeader: injected'}):
-            r=await self.web.put('/api/settings',json=data,headers=self.headers)
+            r=await self.web.put('/api/admin/smtp',json=data,headers=self.headers)
             self.assertEqual(r.status,400)
