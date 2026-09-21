@@ -51,7 +51,7 @@ async function refresh() {
     if(!records.length) {
       $('#empty').replaceChildren(el('span',s.stale?'!':s.rule_count?'✓':'—','empty-icon'),
         el('h3',s.stale?'暂时无法确认填写情况':s.last_success && s.rule_count?'当前项目均已填写':'还没有监听规则'),
-        el('p',s.stale?'检查连接设置后，再试一次。':s.rule_count?'已检查的责任人行没有缺失项。':'到管理页添加一条监听规则，即可开始。'));
+        el('p',s.stale?'检查连接设置后，再试一次。':s.rule_count?'':'请添加监听规则'));
       if(!s.rule_count || s.stale) { const a=el('a','前往监听管理 →');a.href='/manage';$('#empty').append(a); }
     }
   } catch(err) { $('#health').textContent='连接失败'; $('#health').className='badge bad'; $('#errors').hidden=false; $('#errors').textContent='无法连接服务器，当前显示可能为旧结果。'+err.message; }
@@ -110,7 +110,7 @@ async function loadRoster() {
     const label=el('label',undefined,'checkbox'), check=el('input');check.type='checkbox';check.value=name;check.checked=!(roster.excluded || []).includes(name);label.append(check,document.createTextNode(name));$('#roster-names').append(label);
   }
   $('#save-selection').disabled=!roster.source;
-  $('#roster-state').textContent=roster.source?`${roster.names.length} 位同事 · 已选择 ${roster.names.filter(n=>!roster.excluded.includes(n)).length} 人 · 名单更新 ${date(roster.updated_at)}`:'请先配置同事名单，现有监听规则会在配置后继续检查。';
+  $('#roster-state').textContent=roster.source?`${roster.names.length} 位同事 · 已选择 ${roster.names.filter(n=>!roster.excluded.includes(n)).length} 人 · 名单更新 ${date(roster.updated_at)}`:'尚未配置名单';
   const status=await api('status');$('#layout-state').textContent='上次同步：'+date(status.layout_updated_at);
 }
 $('#source-load-sheets').onclick=async()=>{
@@ -118,7 +118,7 @@ $('#source-load-sheets').onclick=async()=>{
   try{const sheets=await api('sheets');$('#source-sheet-select').replaceChildren(new Option('请选择名单工作表',''));for(const s of sheets)$('#source-sheet-select').append(new Option(s.title,s.sheetId));toast(`已读取 ${sheets.length} 个工作表`);}catch(e){toast(e.message);}finally{b.disabled=false;}
 };
 $('#source-sheet-select').onchange=e=>{if(e.target.value){$('#source-form').elements.sheet_id.value=e.target.value;$('#source-form').elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
-$('#source-form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('[type=submit]');b.disabled=true;try{await api('roster','PUT',Object.fromEntries(new FormData(e.target)));await loadRoster();toast('名单已更新，默认统计新同事');}catch(e){toast(e.message);}finally{b.disabled=false;}};
+$('#source-form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('[type=submit]');b.disabled=true;try{await api('roster','PUT',Object.fromEntries(new FormData(e.target)));await loadRoster();toast('名单已更新');}catch(e){toast(e.message);}finally{b.disabled=false;}};
 $('#select-all').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=true);
 $('#select-none').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=false);
 $('#save-selection').onclick=async()=>{const b=$('#save-selection');b.disabled=true;try{const selected=[...$('#roster-names').querySelectorAll('input:checked')].map(c=>c.value);await api('roster/selection','PUT',{selected});await loadRoster();toast('统计范围已保存');}catch(e){toast(e.message);}finally{b.disabled=false;}};
@@ -136,14 +136,14 @@ async function loadVariables() {
       const tr = el('tr'), name = el('td'), value = el('td');
       name.append(el('code', row.name, 'variable-code'));
       if (row.value === null) value.append(el('span', 'null', 'muted'));
-      else if (row.value === '') value.append(el('span', '（空）', 'muted'));
+      else if (row.value === '') value.append(el('span', '空', 'muted'));
       else value.textContent = String(row.value);
       tr.append(name, el('td', row.type), el('td', row.description), value);
       ['变量名', '类型', '描述', '值'].forEach((label, i) => tr.children[i].dataset.label = label);
       fragment.append(tr);
     }
     $('#variable-rows').replaceChildren(fragment);
-    $('#variables-state').textContent = `共 ${data.rows.length} 个变量 · 值更新于 ${data.generated_at.replace('T', ' ')} · 每 30 秒刷新${data.query_running ? ' · 表格查询中' : ''}`;
+    $('#variables-state').textContent = `共 ${data.rows.length} 个变量 · 值更新于 ${data.generated_at.replace('T', ' ')}${data.query_running ? ' · 表格查询中' : ''}`;
   } catch (error) {
     $('#variables-state').textContent = '变量刷新失败，下方可能是旧值：' + error.message;
     toast(error.message);

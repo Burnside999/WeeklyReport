@@ -13,7 +13,7 @@ import aiohttp
 from aiohttp import web
 from .core import (Store, doc_id, integer, now, validate_rule,
                    written_text, target_columns, task_ranges, missing_tasks,
-                   validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables)
+                   validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables, migrate_roster)
 from .variables import build_variables
 from .templates import MailEngine, TemplateConflict
 from .mail import DeliveryError, email_address
@@ -145,6 +145,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         raise RuntimeError('ADMIN_PASSWORD 必须设置为至少 12 字符的自定义密码')
     store = Store(str(Path(data_dir or os.environ.get('DATA_DIR', './data')) / 'weeklyreport.db'))
     migrate_variables(store)
+    migrate_roster(store)
     settings_data = store.settings()
     settings_data.pop("smtp_recipient", None)
     settings_data.pop("smtp_recipient_name", None)

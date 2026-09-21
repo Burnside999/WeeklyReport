@@ -6,7 +6,7 @@
 <label class="auto-query-toggle">开启自动查询<input id="auto-query" type="checkbox" role="switch" disabled></label>
 <p id="schedule" class="muted smalltext"></p><div id="errors" class="notice" role="status" hidden></div>
 <div class="section-heading"><h2>未填明细</h2><span id="detail-count" class="muted"></span></div>
-<div class="table-wrap"><table><thead><tr><th scope="col">责任人</th><th scope="col">未填条目</th><th scope="col">工作表</th></tr></thead><tbody id="records"></tbody></table><div id="empty" class="empty"><span class="empty-icon">—</span><h3>还没有检查结果</h3><p>到管理页添加一条监听规则，即可开始。</p><a href="/manage">配置监听规则 →</a></div></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">责任人</th><th scope="col">未填条目</th><th scope="col">工作表</th></tr></thead><tbody id="records"></tbody></table><div id="empty" class="empty"><span class="empty-icon">—</span><h3>还没有检查结果</h3><p>请添加监听规则</p><a href="/manage">配置监听规则 →</a></div></div>
 </section>
 <section id="manage" hidden><div class="page-heading"><div><p class="eyebrow">MANAGEMENT</p><h1>监听管理</h1></div><button id="add-rule" class="primary">＋ 添加规则</button></div><div id="rules-list"></div>
 <form id="rule-form" class="panel" hidden><div class="section-heading"><h2 id="form-title">添加监听规则</h2><button type="button" id="cancel-rule" class="quiet">取消</button></div><input type="hidden" name="id"><label>变量名<input name="variable_name" pattern="[A-Za-z][A-Za-z0-9]{0,63}" maxlength="64" placeholder="留空自动分配 listenerX"></label><label>条目名称<input name="name" placeholder="例如：本周工作总结" maxlength="80" required></label><label>工作表<select id="sheet-select"><option value="">等待读取工作表</option></select></label><button type="button" id="load-sheets" class="secondary full">从腾讯文档读取工作表</button><div class="grid2"><label>Sheet ID<input name="sheet_id" required placeholder="例如：BB08J2" maxlength="100"></label><label>工作表名称<input name="sheet_name" placeholder="用于显示" maxlength="100"></label><label>责任人所在列<input name="owner_column" value="A" placeholder="A 或 1" required></label><label>需要检查的列<input name="target_columns" value="B" placeholder="B,D,F 或 2,4,6" required></label><label>起始行<input name="start_row" type="number" value="2" min="1" max="100000" required></label><label>结束行<input name="end_row" type="number" value="1000" min="1" max="100000" required></label></div><label class="checkbox"><input name="enabled" type="checkbox" checked>启用这条规则</label><button class="primary full" type="submit">保存规则</button></form>
@@ -17,13 +17,13 @@
 <p id="mail-load-state" class="help" role="status"></p><div id="template-list"></div>
 <form id="template-form" class="panel" hidden>
 <div class="section-heading"><h2 id="template-form-title">新建邮件模板</h2><button id="cancel-template" type="button" class="quiet">取消</button></div>
-<fieldset><legend>接收人（最多 5 个邮箱）</legend><div id="mail-recipients"></div><button id="add-recipient" type="button" class="secondary">＋ 添加接收人</button></fieldset>
+<fieldset><legend>接收人</legend><div id="mail-recipients"></div><button id="add-recipient" type="button" class="secondary">＋ 添加接收人</button></fieldset>
 <label for="mail-subject">邮件标题</label><div class="variable-editor"><pre id="subject-highlight" aria-hidden="true"></pre><textarea id="mail-subject" rows="2" maxlength="300" required spellcheck="false"></textarea></div>
 <label for="mail-body">邮件内容</label><div class="variable-editor"><pre id="body-highlight" aria-hidden="true"></pre><textarea id="mail-body" rows="9" maxlength="20000" required spellcheck="false"></textarea></div>
 
 <p id="mail-editor-state" class="help" role="status"></p>
 <fieldset><legend>触发模式</legend><div class="trigger-mode"><label class="checkbox"><input type="radio" name="mail_mode" value="manual" checked>手动触发</label><label class="checkbox"><input type="radio" name="mail_mode" value="auto">自动触发</label></div></fieldset>
-<fieldset id="automatic-fields" hidden disabled><legend>自动触发配置（北京时间）</legend>
+<fieldset id="automatic-fields" hidden disabled><legend>自动触发配置</legend>
 <label>何时开始检查<select id="schedule-kind"><option value="variable">日期变量 + 时刻</option><option value="fixed">固定日期时间</option></select></label>
 <div id="schedule-variable-fields"><label>日期 / 日期时间变量<input id="schedule-variable" list="schedule-variables" placeholder="global.week.friday" required></label><datalist id="schedule-variables"></datalist><label>当天时刻<input id="schedule-clock" type="time" value="00:00" step="1" required></label></div>
 <div id="schedule-fixed-fields" hidden><label>固定时间<input id="schedule-fixed" type="datetime-local" step="1" disabled required></label></div><p id="schedule-preview" class="help"></p>

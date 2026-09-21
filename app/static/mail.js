@@ -67,7 +67,7 @@
     const row=catalog.rows.find(r=>r.name===name);
     $('#schedule-clock').disabled=!variable || row?.type==='datetime';
     const value=variable?catalog.values[name]:$('#schedule-fixed').value;
-    $('#schedule-preview').textContent=value ? '本轮开始时间：'+value+(variable && row?.type==='date'?' '+$('#schedule-clock').value:'')+'（北京时间）' : '请选择合法的时间点；未知日期变量将在有值后检查。';
+    $('#schedule-preview').textContent=value ? '本轮开始时间：'+value+(variable && row?.type==='date'?' '+$('#schedule-clock').value:'') : '请选择时间';
   }
   function modeFields() {
     const auto=form.elements.mail_mode.value==='auto';$('#automatic-fields').hidden=!auto;$('#automatic-fields').disabled=!auto;scheduleFields();

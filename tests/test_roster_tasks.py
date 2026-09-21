@@ -6,7 +6,7 @@ import zipfile
 from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
 from app.core import (missing_tasks, validate_rule, validate_source, refresh_roster,
-                      written_text, Store)
+                      written_text, Store, colleague_name, migrate_roster)
 from app.merge_layout import parse_layout
 from app.main import create_app, Monitor
 from app.mail import SMTPConfig, SMTPMailer
@@ -15,6 +15,43 @@ from test_app import rule, cell, FakeClient
 
 
 class TaskTests(unittest.TestCase):
+    def test_colleague_remarks_and_deduplication(self):
+        for raw, expected in [('张三（休假）', '张三'), ('(分公司)李四', '李四'),
+                              (' 王五（分公司(休假)）(备注) ', '王五'),
+                              ('（休假）', ''), ('张（备注）三', '张三'),
+                              ('张三（未闭合', '张三（未闭合')]:
+            self.assertEqual(colleague_name(raw), expected)
+        roster = refresh_roster({}, ['张三（休假）','张三','(分公司)李四','（休假）'],
+                                {'excluded':['张三（休假）','张三','王五(分公司)']})
+        self.assertEqual(roster['names'], ['张三','李四'])
+        self.assertEqual(roster['excluded'], ['张三','王五'])
+        with self.assertRaises(ValueError):
+            refresh_roster({}, ['（休假）', '(分公司)'])
+
+    def test_clean_names_are_used_for_task_statistics(self):
+        roster = refresh_roster({}, ['张三（分公司）','张三(备注)','李四（休假）'])
+        rows = missing_tasks(rule(), {(2,1):cell('张三、李四')}, [], roster['names'])
+        self.assertEqual([row['person'] for row in rows], ['张三','李四'])
+
+    def test_existing_roster_migration_preserves_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(directory+'/db')
+            try:
+                store.set('roster', dict(source={'sheet_id':'s'}, updated_at='old',
+                    names=['张三(分公司)','张三','李四（休假）'], excluded=['李四（休假）']))
+                store.set('snapshot', {'stale':False, 'last_success':'old'})
+                migrate_roster(store)
+                roster = store.get('roster')
+                self.assertEqual(roster['names'], ['张三','李四'])
+                self.assertEqual(roster['excluded'], ['李四'])
+                self.assertEqual(roster['updated_at'], 'old')
+                self.assertTrue(store.get('snapshot')['stale'])
+                store.set('snapshot', {'stale':False})
+                migrate_roster(store)
+                self.assertFalse(store.get('snapshot')['stale'])
+            finally:
+                store.close()
+
     def test_multiple_owners_parentheses_exclusion_and_separate_tasks(self):
         r=rule(end_row=7,target_columns=[3,4])
         cells={(2,1):cell('张三（协助李四）、王五'),(3,4):cell('已完成'),
@@ -141,4 +178,3 @@ class FeatureWebTests(unittest.IsolatedAsyncioTestCase):
         for data in ({'smtp_port':0},{'smtp_sender':'invalid'},{'smtp_sender_name':'bad\r\nHeader: injected'}):
             r=await self.web.put('/api/settings',json=data,headers=self.headers)
             self.assertEqual(r.status,400)
-
