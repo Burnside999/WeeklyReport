@@ -1,22 +1,8 @@
 'use strict';
-const $ = s => document.querySelector(s);
-const page = location.pathname === '/mail' ? 'mail' : location.pathname === '/variables' ? 'variables' : location.pathname === '/settings' ? 'settings' : location.pathname === '/manage' ? 'manage' : 'home';
-for (const name of ['home', 'manage', 'mail', 'settings', 'variables']) {
-  $('#' + name).hidden = page !== name;
-  $('#nav-' + name).classList.toggle('active', page === name);
-  if (page === name) $('#nav-' + name).setAttribute('aria-current', 'page');
-}
-let allRules = [], toastTimer, checking = false, togglingAuto = false, refreshVersion = 0;
-async function api(path, method = 'GET', body) {
-  const response = await fetch('/api/' + path, {method, headers:{'Content-Type':'application/json','X-Requested-With':'WeeklyReport'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
-  if (response.status === 401) { location.replace('/login'); throw new Error('请重新登录'); }
-  const text = await response.text();
-  let data; try { data = JSON.parse(text); } catch { data = {error:text}; }
-  if (!response.ok) {const error = new Error(data.error || '请求失败，请重试');error.data=data;error.status=response.status;throw error;}
-  return data;
-}
-function toast(message) { clearTimeout(toastTimer); $('#toast').textContent = message; $('#toast').hidden = false; toastTimer = setTimeout(() => $('#toast').hidden = true, 4500); }
-function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+(async () => {
+  const workspace = await workspaceReady;
+  if(!workspace?.document || page === 'admin')return;
+  let allRules = [], checking = false, togglingAuto = false, refreshVersion = 0;
 function date(value) { return value ? new Date(value).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}) : '尚未查询'; }
 function col(n) { let s=''; while(n) { n--; s=String.fromCharCode(65+n%26)+s; n=Math.floor(n/26); } return s; }
 async function refresh() {
@@ -72,7 +58,6 @@ $('#auto-query').onchange = async event => {
   catch(err) {toggle.checked=!enabled;toast(err.message);}
   finally {togglingAuto=false;toggle.disabled=false;await refresh();}
 };
-$('#logout').onclick = async () => {try {await api('logout','POST',{});location.replace('/login');}catch(err){toast(err.message);}};
 const form=$('#rule-form');
 function edit(rule) {
   form.reset(); form.hidden=false; $('#form-title').textContent=rule?'编辑监听规则':'添加监听规则';
@@ -102,9 +87,9 @@ $('#load-sheets').onclick=async()=>{const b=$('#load-sheets');b.disabled=true;b.
 $('#sheet-select').onchange=e=>{if(e.target.value){form.elements.sheet_id.value=e.target.value;form.elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
 async function loadSettings(){
   const s=await api('settings'),f=$('#settings-form');
-  for(const key of ['document_url','interval_seconds','timeout_seconds','client_id','open_id','access_token','smtp_host','smtp_port','smtp_security','smtp_sender','smtp_sender_name','smtp_password']) f.elements[key].value=s[key];
+  for(const key of ['document_name','document_url','interval_seconds','timeout_seconds','client_id','open_id','access_token']) f.elements[key].value=s[key];
 }
-$('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,buttons=[...f.elements].filter(el=>el.type==='submit');buttons.forEach(b=>b.disabled=true);const data=Object.fromEntries(new FormData(f));try{await api('settings','PUT',data);await loadSettings();await loadRoster();toast('设置已保存');}catch(err){toast(err.message);}finally{buttons.forEach(b=>b.disabled=false);}};
+$('#settings-form').onsubmit=async e=>{e.preventDefault();const f=e.target,buttons=[...f.elements].filter(el=>el.type==='submit');buttons.forEach(b=>b.disabled=true);const data=Object.fromEntries(new FormData(f));try{await api('settings','PUT',data);await loadSettings();await loadRoster();await refreshDocumentNames();toast('设置已保存');}catch(err){toast(err.message);}finally{buttons.forEach(b=>b.disabled=false);}};
 if(page === 'manage') renderRules().catch(err=>toast(err.message));
 else if(page === 'variables') {loadVariables();setInterval(()=>{if(!document.hidden)loadVariables();},30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadVariables();});}
 else if(page === 'settings') Promise.all([loadSettings(),loadRoster()]).catch(err=>toast(err.message));
@@ -159,3 +144,5 @@ async function loadVariables() {
 }
 $('#refresh-variables').onclick = loadVariables;
 
+
+})().catch(error=>toast(error.message));

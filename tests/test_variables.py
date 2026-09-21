@@ -1,10 +1,11 @@
 import tempfile
 import unittest
 from datetime import datetime, timezone
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestServer
+from support import TestClient, create_app, scoped_store
 
 from app.core import Store, migrate_variables
-from app.main import Monitor, create_app
+from app.main import Monitor
 from app.variables import build_variables
 from test_app import rule, FakeClient
 
@@ -84,7 +85,7 @@ class VariableWebTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await client.get('/api/variables')).status, 401)
                 self.assertEqual((await client.get('/variables', allow_redirects=False)).status, 302)
                 headers = {'X-Requested-With':'WeeklyReport'}
-                await client.post('/api/login', json={'password':'variable-test-password'}, headers=headers)
+                await client.post('/api/login', json={'username':'admin','password':'variable-test-password'}, headers=headers)
                 self.assertEqual((await client.get('/variables')).status, 200)
                 r = await client.post('/api/rules', json=rule(), headers=headers)
                 first = (await r.json())[0]
@@ -97,7 +98,8 @@ class VariableWebTests(unittest.IsolatedAsyncioTestCase):
                 # Legacy clients that omit the new field must preserve the namespace.
                 r = await client.put('/api/rules/' + first['id'], json=rule(), headers=headers)
                 self.assertEqual((await r.json())[0]['variable_name'], 'ReportA')
-                await client.put('/api/settings', json={'smtp_password':'TOPSECRET','access_token':'APITOKEN'}, headers=headers)
+                await client.put('/api/settings', json={'access_token':'APITOKEN'}, headers=headers)
+                await client.put('/api/admin/smtp', json={'smtp_password':'TOPSECRET'}, headers=headers)
                 response = await client.get('/api/variables')
                 data = await response.json()
                 self.assertEqual(len(data['rows']), 47)

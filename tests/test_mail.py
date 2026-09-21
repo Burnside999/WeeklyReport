@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestServer
+from support import TestClient, create_app, scoped_store
 from app.core import Store
-from app.main import create_app
 from app.mail import SMTPConfig, SMTPMailer, DeliveryError
 from app.templates import MailEngine, TemplateConflict, validate_template, render, resolve_time, typed_value
 from app.variables import LOCAL_TZ, build_variables
@@ -184,7 +184,7 @@ class MailWebTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await client.get('/mail',allow_redirects=False)).status,302)
                 self.assertEqual((await client.get('/api/templates')).status,401)
                 headers={'X-Requested-With':'WeeklyReport'}
-                await client.post('/api/login',json={'password':'mail-test-password'},headers=headers)
+                await client.post('/api/login',json={'username':'admin','password':'mail-test-password'},headers=headers)
                 self.assertEqual(await (await client.get('/api/templates')).json(),[])
                 r=await client.post('/api/templates',json=template());self.assertEqual(r.status,403)
                 r=await client.post('/api/templates',json=template(),headers=headers);item=await r.json()

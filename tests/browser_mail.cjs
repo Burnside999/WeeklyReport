@@ -12,7 +12,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     browser=await chromium.launch({headless:true});
     const page=await browser.newPage({viewport:{width:390,height:844}}), errors=[];
     page.on('pageerror',error=>errors.push(String(error)));
-    await page.goto(base+'/mail');await page.locator('#password').fill('browser-test-password');await page.locator('#login button').click();await page.waitForURL(base+'/');
+    await page.goto(base+'/mail');await page.locator('#username').fill('admin');await page.locator('#password').fill('browser-test-password');await page.locator('#login button').click();await page.waitForURL(url=>url.pathname==='/' );await page.locator('#document-select').waitFor();
+    const documentId=await page.locator('#document-select').inputValue();
+    await page.context().setExtraHTTPHeaders({'X-Document-ID':documentId});
     const autoQuery=page.locator('#auto-query');
     await autoQuery.waitFor();await page.locator('#auto-query:not(:disabled)').waitFor();
     assert(await autoQuery.isChecked());await autoQuery.uncheck();
@@ -45,13 +47,15 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.setViewportSize({width:390,height:844});
     await page.unroute('**/api/status');
     await page.locator('#nav-mail').click();await page.getByText('还没有邮件模板',{exact:true}).waitFor();
-    assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表']);
+    assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表','管理']);
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
     for(let i=0;i<4;i++)await page.locator('#add-recipient').click();
     assert(await page.locator('#add-recipient').isDisabled());
     for(let i=0;i<5;i++)await page.locator('#mail-recipients input').nth(i).fill(`user${i}@example.com`);
     await page.locator('#mail-subject').fill('报告 {{global.date}}');
     await page.locator('#mail-body').fill('人数 {{global.listencount}}\n{{global.invalid}}');
+    await page.locator('#subject-highlight .valid-variable').waitFor();
+    await page.locator('#body-highlight .invalid-variable').waitFor();
     assert.equal(await page.locator('#subject-highlight .valid-variable').count(),1);
     assert.equal(await page.locator('#body-highlight .invalid-variable').count(),1);
     assert.equal(await page.locator('#subject-highlight .valid-variable').evaluate(e=>getComputedStyle(e).color),'rgb(21, 101, 192)');
@@ -90,17 +94,15 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('#settings details.advanced summary').click();
     await page.locator('#settings details:not(.advanced) summary').click();
     assert.equal(await page.locator('[name=file_id],[name=refresh_token],[name=client_secret],[name=clear_secrets],[name=clear_smtp_password]').count(),0);
-    await page.locator('[name=access_token]').fill('ui-test-token');
-    await page.locator('[name=smtp_password]').fill('ui-test-password');
+    await page.locator('#settings [name=access_token]').fill('ui-test-token');
     await page.getByRole('button',{name:'保存高级设置',exact:true}).click();
     await page.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
     await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/settings')),page.reload()]);
-    await page.locator('[name=access_token]').waitFor({state:'attached'});
+    await page.locator('#settings [name=access_token]').waitFor({state:'attached'});
     await page.locator('#settings details.advanced summary').click();
     await page.locator('#settings details:not(.advanced) summary').click();
-    assert.equal(await page.locator('[name=access_token]').inputValue(),'ui-test-token');
-    assert.equal(await page.locator('[name=smtp_password]').inputValue(),'ui-test-password');
-    assert.equal(await page.locator('[name=access_token]').getAttribute('type'),'password');
+    assert.equal(await page.locator('#settings [name=access_token]').inputValue(),'ui-test-token');
+    assert.equal(await page.locator('#settings [name=access_token]').getAttribute('type'),'password');
     for(const width of [320,390,600,768,1280]) {
       await page.setViewportSize({width,height:844});
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`settings overflow at ${width}`);
@@ -112,12 +114,11 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
         return button.top-input.bottom>=16;
       }),`save button spacing at ${width}`);
     }
-    await page.locator('[name=access_token]').fill('');
-    await page.locator('[name=smtp_password]').fill('');
+    await page.locator('#settings [name=access_token]').fill('');
     await page.getByRole('button',{name:'保存高级设置',exact:true}).click();
     await page.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
-    const cleared=await (await page.request.get(base+'/api/settings')).json();
-    assert.equal(cleared.access_token,'');assert.equal(cleared.smtp_password,'');
+    const cleared=await (await page.request.get(base+'/api/settings',{headers:{'X-Document-ID':documentId}})).json();
+    assert.equal(cleared.access_token,'');assert(!('smtp_password' in cleared));
     // Long URLs/names must remain readable without horizontal scrolling at every breakpoint.
     await page.route('**/api/variables', async route=>{
       const response=await route.fetch(), data=await response.json();
@@ -136,7 +137,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     }
     // List loops: syntax diagnostics, local-variable highlighting and send gates.
     await page.unroute('**/api/variables');
-    const headers={'X-Requested-With':'WeeklyReport'};
+    const headers={'X-Requested-With':'WeeklyReport','X-Document-ID':documentId};
     const rule={name:'研发',variable_name:'listener1',sheet_id:'tab1',sheet_name:'研发',owner_column:1,target_column:3,start_row:2,end_row:5,enabled:true};
     const created=await (await page.request.post(base+'/api/rules',{headers,data:rule})).json();
     const listener=created.find(r=>r.variable_name==='listener1');assert(listener);
@@ -157,6 +158,16 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('#body-highlight .valid-variable').waitFor();
     await page.locator('#template-form:not(.syntax-invalid)').waitFor();
     assert.equal(await page.locator('#mail-editor-state').textContent(),'');
+    assert((await page.locator('#body-highlight .syntax-keyword').count())>=4);
+    // Observe a full polling interval: no temporary red or pending local variable.
+    await page.evaluate(()=>{
+      window.highlightGlitch=false;
+      const mirror=document.querySelector('#body-highlight');
+      window.highlightObserver=new MutationObserver(()=>{if(mirror.querySelector('.invalid-variable,.pending-variable'))window.highlightGlitch=true;});
+      window.highlightObserver.observe(mirror,{subtree:true,childList:true,attributes:true});
+    });
+    await page.waitForTimeout(5600);
+    assert.equal(await page.evaluate(()=>{window.highlightObserver.disconnect();return window.highlightGlitch;}),false);
     await page.locator('#save-template').click();await page.locator('#template-form').waitFor({state:'hidden'});
     await loopCard.getByRole('button',{name:'发送邮件',exact:true}).click();
     await loopCard.getByRole('button',{name:'发送成功',exact:true}).waitFor();
@@ -166,7 +177,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.request.put(base+'/api/rules/'+listener.id,{headers,data:{...rule,variable_name:'Renamed'}});
     await loopCard.locator('.syntax-warning').waitFor({timeout:10000});
     assert(await loopCard.getByRole('button',{name:'发送成功',exact:true}).isDisabled());
-    const invalidated=(await (await page.request.get(base+'/api/templates')).json()).find(t=>t.subject==='循环测试');
+    const invalidated=(await (await page.request.get(base+'/api/templates',{headers:{'X-Document-ID':documentId}})).json()).find(t=>t.subject==='循环测试');
     const blocked=await page.request.post(base+'/api/templates/'+invalidated.id+'/send',{headers,data:{revision:invalidated.revision}});
     assert.equal(blocked.status(),400);
     assert.equal((await (await page.request.get(base+'/test/deliveries')).json()).length,count);

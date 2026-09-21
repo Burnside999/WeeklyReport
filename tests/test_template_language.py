@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestServer
+from support import TestClient, create_app, scoped_store
 from app.core import Store
-from app.main import create_app
 from app.template_language import Program, TemplateSyntaxError
 from app.templates import MailEngine, render, check_syntax
 from app.variables import LOCAL_TZ, build_variables
@@ -194,7 +194,7 @@ class LoopWebTests(unittest.IsolatedAsyncioTestCase):
             async with TestClient(TestServer(app)) as client:
                 self.assertEqual((await client.post('/api/templates/validate',json={},headers={'X-Requested-With':'WeeklyReport'})).status,401)
                 headers = {'X-Requested-With':'WeeklyReport'}
-                await client.post('/api/login',json={'password':'loop-test-password'},headers=headers)
+                await client.post('/api/login',json={'username':'admin','password':'loop-test-password'},headers=headers)
                 raw = template(body='{% for l in global.alllistener %}{{l.wrong}}{% endfor %}')
                 self.assertEqual((await client.post('/api/templates/validate',json=raw)).status,403)
                 result = await (await client.post('/api/templates/validate',json=raw,headers=headers)).json()

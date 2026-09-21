@@ -2,13 +2,19 @@
 import tempfile
 from datetime import datetime
 from aiohttp import web
-from app.main import create_app
+from support import create_app
+from app.tencent import TencentClient, TencentError
 from app.variables import LOCAL_TZ
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as directory:
         app = create_app(directory, 'browser-test-password', start_scheduler=False)
         deliveries = []
+        async def fake_sheets(self):
+            if 'NOTSHEET' in self.store.settings()['document_url']:
+                raise TencentError('不是在线表格')
+            return [{'sheetId':'tab1','title':'研发'}]
+        TencentClient.sheets = fake_sheets
         async def setup(app):
             async def fake_sender(**kwargs):
                 deliveries.append(kwargs)
@@ -22,3 +28,4 @@ if __name__ == '__main__':
         app.on_startup.append(setup)
         app.add_routes([web.post('/test/tick',tick), web.get('/test/deliveries',sent)])
         web.run_app(app, host='127.0.0.1', port=18081, access_log=None)
+

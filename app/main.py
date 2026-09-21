@@ -16,7 +16,9 @@ from .core import (Store, doc_id, integer, now, validate_rule,
                    validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables, migrate_roster)
 from .variables import build_variables
 from .templates import MailEngine, TemplateConflict, check_syntax
-from .mail import DeliveryError, email_address
+from .mail import DeliveryError
+from .accounts import Accounts, CREDENTIAL_KEYS, SMTP_KEYS, credentials, password_hash, verify_password
+from .workspaces import Workspaces, register_management, invalidate
 from .tencent import TencentClient, TencentError
 
 LOG = logging.getLogger(__name__)
@@ -144,19 +146,10 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     if len(password) < 12 or password == 'change-this-password':
         raise RuntimeError('ADMIN_PASSWORD 必须设置为至少 12 字符的自定义密码')
     store = Store(str(Path(data_dir or os.environ.get('DATA_DIR', './data')) / 'weeklyreport.db'))
-    migrate_variables(store)
-    migrate_roster(store)
-    settings_data = store.settings()
-    settings_data.pop("smtp_recipient", None)
-    settings_data.pop("smtp_recipient_name", None)
-    for removed in ('refresh_token', 'client_secret', 'token_expires_at', 'file_id'):
-        settings_data.pop(removed, None)
-    store.set("settings", settings_data)
+    accounts = Accounts(store,password)
     sessions, attempts = {}, {}
     login_slots = asyncio.Semaphore(2)
-    salt = secrets.token_bytes(16)
-    # Fixed-length prehash avoids HMAC's trailing-NUL password equivalence.
-    password_hash = hashlib.scrypt(hashlib.sha256(password.encode()).digest(), salt=salt, n=16384, r=8, p=1)
+    dummy_hash = password_hash(secrets.token_urlsafe(32))
     cookie_secure = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
     session_hours = integer(os.environ.get('SESSION_HOURS', '24'), 1, 168, '会话时长')
 
@@ -169,15 +162,43 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
                 if request.content_type != 'application/json':
                     raise web.HTTPUnsupportedMediaType()
             token = request.cookies.get('wr_session', '')
-            authenticated = sessions.get(token, 0) > time.time()
+            session = sessions.get(token)
+            user = accounts.user(uid=session['uid']) if session and session['expires'] > time.time() else None
+            authenticated = bool(user and user['version'] == session['version'])
+            if authenticated:
+                request['user'], request['session'] = user, session
             public = request.path in ('/login', '/api/login', '/healthz', '/static/style.css', '/static/login.js')
             if not public and not authenticated:
                 if request.path.startswith('/api/'):
-                    response = web.json_response({'error': '请先输入访问密码'}, status=401)
+                    response = web.json_response({'error': '请先登录'}, status=401)
                 else:
                     raise web.HTTPFound('/login')
             else:
-                response = await handler(request)
+                if authenticated:
+                    if request.path == '/admin' and user['role'] not in ('admin','superadmin'):
+                        raise web.HTTPForbidden(text='无权访问管理界面')
+                    scoped = request.path.startswith('/api/') and request.path not in ('/api/login','/api/logout','/api/me') and not request.path.startswith(('/api/admin/','/api/documents'))
+                    if scoped:
+                        did = request.headers.get('X-Document-ID','')
+                        if not did:
+                            raise web.HTTPConflict(text='请选择文档管理器')
+                        document = accounts.document(did,user['id'])
+                        if not document:
+                            raise web.HTTPNotFound(text='文档管理器不存在')
+                        request['workspace'] = app['workspaces'].items[did]
+                        request['document'] = document
+                if authenticated and request.path.startswith('/api/') and request.path not in ('/api/login','/api/logout') and request.method != 'GET':
+                    if app['workspaces'].mutations.locked():
+                        raise web.HTTPConflict(text='操作正在进行，请稍后重试')
+                    async with app['workspaces'].mutations:
+                        current_user = accounts.user(uid=user['id'])
+                        if not current_user or current_user['version'] != session['version']:
+                            raise web.HTTPUnauthorized(text='请重新登录')
+                        if scoped and not accounts.document(did,user['id']):
+                            raise web.HTTPNotFound(text='文档管理器不存在')
+                        response = await handler(request)
+                else:
+                    response = await handler(request)
         except (ValueError, TypeError, KeyError) as exc:
             response = web.json_response({'error': str(exc)[:200]}, status=400)
         except TemplateConflict as exc:
@@ -194,25 +215,15 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         return response
 
     app = web.Application(middlewares=[security], client_max_size=65536)
-    app['store'] = store
+    app['store'], app['accounts'] = store, accounts
 
     async def lifecycle(app):
         async with aiohttp.ClientSession() as session:
-            client = TencentClient(store, session)
-            monitor = Monitor(store, client)
-            app['client'], app['monitor'] = client, monitor
-            mailer = app['mail_engine'] = MailEngine(store, monitor)
-            mail_task = asyncio.create_task(mailer.loop()) if start_scheduler else None
-            task = asyncio.create_task(monitor.loop()) if start_scheduler else None
+            hub = app['workspaces'] = Workspaces(accounts,session,Monitor,start_scheduler)
+            for document in accounts.documents():
+                hub.add(document)
             yield
-            mailer.stopping = True
-            mailer.wake.set()
-            if mail_task:
-                await mail_task
-            if task:
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
+            await hub.close()
         store.close()
     app.cleanup_ctx.append(lifecycle)
 
@@ -231,25 +242,26 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('密码格式错误')
-        supplied = raw.get('password', '')
-        if not isinstance(supplied, str) or len(supplied) > 1024:
-            raise ValueError('密码格式错误')
+        supplied, name = raw.get('password', ''), raw.get('username', '')
+        if not isinstance(supplied, str) or len(supplied) > 1024 or not isinstance(name,str) or len(name)>64:
+            raise ValueError('帐号或密码格式错误')
         if login_slots.locked():
             return web.json_response({'error': '登录请求繁忙，请稍后重试'}, status=429)
+        user = accounts.user(name=name)
         async with login_slots:
-            candidate = await asyncio.to_thread(hashlib.scrypt, hashlib.sha256(supplied.encode()).digest(),
-                                               salt=salt, n=16384, r=8, p=1)
-        if not hmac.compare_digest(candidate, password_hash):
-            return web.json_response({'error': '访问密码不正确'}, status=401)
+            valid = await asyncio.to_thread(verify_password,supplied,user['password'] if user else dummy_hash)
+        current_user = accounts.user(uid=user['id']) if user else None
+        if not valid or not current_user or current_user['version'] != user['version']:
+            return web.json_response({'error': '帐号或密码不正确'}, status=401)
         attempts.pop(ip, None)
         for key in list(sessions):
-            if sessions[key] <= current:
+            if sessions[key]['expires'] <= current:
                 del sessions[key]
         if len(sessions) >= 1000:
             sessions.pop(next(iter(sessions)))
         sessions.pop(request.cookies.get('wr_session', ''), None)
         token = secrets.token_urlsafe(32)
-        sessions[token] = current + session_hours * 3600
+        sessions[token] = dict(uid=user['id'],version=user['version'],expires=current + session_hours * 3600)
         response = web.json_response({'ok': True})
         response.set_cookie('wr_session', token, httponly=True, samesite='Strict', secure=cookie_secure,
                             max_age=session_hours * 3600, path='/')
@@ -267,13 +279,15 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def static(request):
         name = request.match_info['name']
-        if name not in ('app.js', 'mail.js', 'login.js', 'style.css'):
+        if name not in ('app.js', 'mail.js', 'login.js', 'workspace.js', 'admin.js', 'style.css'):
             raise web.HTTPNotFound()
         return web.Response(body=(ROOT / name).read_bytes(),
                             content_type='text/css' if name.endswith('.css') else 'application/javascript')
 
     async def status(request):
-        m = app['monitor']
+        runtime = request['workspace']
+        store = runtime.store
+        m = runtime.monitor
         return web.json_response(store.get('snapshot', {}) | dict(running=m.running,
             next_check=m.next_check if store.settings()['auto_query_enabled'] else None,
             auto_query_enabled=store.settings()['auto_query_enabled'], interval_seconds=store.settings()['interval_seconds'],
@@ -282,16 +296,22 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             layout_updated_at=store.get('merge_layout',{}).get('updated_at')))
 
     async def variables(request):
-        return web.json_response(build_variables(store, app['monitor'].running))
+        runtime = request['workspace']
+        store = runtime.store
+        return web.json_response(build_variables(store, runtime.monitor.running))
 
     async def check(request):
-        if app['monitor'].running:
+        runtime = request['workspace']
+        store = runtime.store
+        if runtime.monitor.running:
             return web.json_response({'ok': True, 'running': True}, status=202)
-        app['monitor'].manual_requested = True
-        app['monitor'].wake.set()
+        runtime.monitor.manual_requested = True
+        runtime.monitor.wake.set()
         return web.json_response({'ok': True}, status=202)
 
     async def automatic_query(request):
+        runtime = request['workspace']
+        store = runtime.store
         raw = await request.json()
         if not isinstance(raw, dict) or type(raw.get('enabled')) is not bool:
             raise ValueError('自动查询开关必须为布尔值')
@@ -299,19 +319,21 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         if s['auto_query_enabled'] != raw['enabled']:
             s['auto_query_enabled'] = raw['enabled']
             store.set('settings', s)
-            app['monitor'].next_check = None
-            app['monitor'].wake.set()
+            runtime.monitor.next_check = None
+            runtime.monitor.wake.set()
         return web.json_response({'auto_query_enabled': s['auto_query_enabled']})
 
-    def busy():
-        if app['monitor'].running or app['client'].lock.locked():
+    def busy(runtime):
+        if runtime.monitor.running or runtime.client.lock.locked():
             raise web.HTTPConflict(text='正在读取腾讯文档，请检查完成后再保存')
 
     async def rules(request):
+        runtime = request['workspace']
+        store = runtime.store
         items = store.get('rules', [])
         if request.method == 'GET':
             return web.json_response(items)
-        busy()
+        busy(runtime)
         raw = await request.json()
         rid = request.match_info.get('id')
         if rid and not any(x['id'] == rid for x in items):
@@ -331,58 +353,55 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
                 raise ValueError('最多添加 50 条监听规则')
             items = [value if x['id'] == rid else x for x in items] if rid else items + [value]
         store.set('rules', items)
-        invalidate('监听规则已修改，等待重新查询')
-        app['monitor'].wake.set()
+        invalidate(store, '监听规则已修改，等待重新查询')
+        runtime.monitor.wake.set()
         return web.json_response(items)
 
-    def invalidate(message):
-        snapshot = store.get('snapshot', {})
-        snapshot.update(stale=True, errors=[dict(rule='配置更新', message=message)])
-        store.set('snapshot', snapshot)
-
     async def settings(request):
+        runtime = request['workspace']
+        store = runtime.store
         s = store.settings()
         if request.method == 'GET':
-            # Only authenticated settings requests may read stored credentials.
-            return web.json_response(s)
-        busy()
-        app['mail_engine'].ensure_idle()
+            return web.json_response({k:v for k,v in s.items() if k not in SMTP_KEYS} | {'document_name':request['document']['name']})
+        busy(runtime)
+        runtime.mailer.ensure_idle()
         raw = await request.json()
-        if not isinstance(raw, dict):
+        if not isinstance(raw,dict):
             raise ValueError('设置格式错误')
-        for k in ('document_url', 'client_id', 'open_id',
-                  'smtp_host', 'smtp_sender', 'smtp_sender_name', 'smtp_security', 'access_token', 'smtp_password'):
-            if k in raw:
-                if not isinstance(raw[k], str) or len(raw[k]) > 4096 or '\n' in raw[k] or '\r' in raw[k]:
-                    raise ValueError('设置项格式错误')
-                # Missing fields are preserved; explicitly empty fields are cleared.
-                s[k] = raw[k].strip()
-        doc_id(s['document_url'])
-        s['interval_seconds'] = integer(raw.get('interval_seconds', s['interval_seconds']), 60, 86400, '检查间隔（秒）')
-        s['timeout_seconds'] = integer(raw.get('timeout_seconds', s['timeout_seconds']), 5, 120, '请求超时（秒）')
-        s['smtp_port'] = integer(raw.get('smtp_port',s['smtp_port']),1,65535,'发送端口')
-        if s['smtp_security'] not in ('ssl','starttls'):
-            raise ValueError('SMTP 加密方式必须为 SSL 或 STARTTLS')
-        if s['smtp_sender']:
-            email_address(s['smtp_sender'])
-        if s['smtp_host'] and not re.fullmatch(r'[a-zA-Z0-9.-]+',s['smtp_host']):
-            raise ValueError('SMTP 服务器请填写主机名，不含协议和端口')
-        if s['document_url'] != store.settings()['document_url']:
-            store.set('roster',None)
-            store.set('merge_layout',{})
-        store.set('settings', s)
-        invalidate('设置已修改，等待重新查询')
-        app['monitor'].wake.set()
-        return web.json_response({'ok': True})
-
+        if any(k in raw for k in SMTP_KEYS):
+            raise web.HTTPForbidden(text='请在管理界面修改 SMTP')
+        if 'document_url' in raw and raw['document_url'] != s['document_url']:
+            raise ValueError('文档地址不可修改')
+        s['interval_seconds'] = integer(raw.get('interval_seconds',s['interval_seconds']),60,86400,'检查间隔（秒）')
+        s['timeout_seconds'] = integer(raw.get('timeout_seconds',s['timeout_seconds']),5,120,'请求超时（秒）')
+        if any(k in raw for k in CREDENTIAL_KEYS):
+            app['workspaces'].busy(request['user']['id'])
+            creds = credentials(raw,s,required=False)
+        else:
+            creds = None
+        if 'document_name' in raw:
+            accounts.rename_document(store.id,raw['document_name'])
+        store.set('settings',s)
+        if creds is not None:
+            accounts.root.set('credentials:'+store.owner_id,creds)
+            for other in app['workspaces'].owned(store.owner_id):
+                invalidate(other.store,'凭据已更新，等待重新查询')
+                other.monitor.wake.set()
+        invalidate(store,'设置已修改，等待重新查询')
+        runtime.monitor.wake.set()
+        return web.json_response({'ok':True})
     async def sheets(request):
-        return web.json_response(await app['client'].sheets())
+        runtime = request['workspace']
+        store = runtime.store
+        return web.json_response(await runtime.client.sheets())
 
     async def roster(request):
+        runtime = request['workspace']
+        store = runtime.store
         current = store.get('roster')
         if request.method == 'GET':
             return web.json_response(current or {})
-        busy()
+        busy(runtime)
         raw = await request.json()
         if not isinstance(raw,dict):
             raise ValueError('名单设置格式错误')
@@ -396,33 +415,39 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             current['excluded'] = absent + [n for n in current['names'] if n not in selected]
         else:
             source = validate_source(raw)
-            names, source = await app['client'].roster(source)
+            names, source = await runtime.client.roster(source)
             current = refresh_roster(source,names,current)
         store.set('roster',current)
-        invalidate('名单或统计人员已更新，等待重新查询')
-        app['monitor'].wake.set()
+        invalidate(store, '名单或统计人员已更新，等待重新查询')
+        runtime.monitor.wake.set()
         return web.json_response(current)
 
     async def refresh_layout(request):
-        busy()
-        async with app['client'].lock:
-            client = app['client']
+        runtime = request['workspace']
+        store = runtime.store
+        busy(runtime)
+        async with runtime.client.lock:
+            client = runtime.client
             headers = await client.headers()
             fid = await client.file_id(headers)
             metadata = {m['sheetId']:m for m in await client.metadata(fid,headers)}
             result = await client.layout(fid,headers,metadata,force=True)
-        invalidate('合并结构已刷新，等待重新查询')
-        app['monitor'].wake.set()
+        invalidate(store, '合并结构已刷新，等待重新查询')
+        runtime.monitor.wake.set()
         return web.json_response({'updated_at':result['updated_at']})
 
     async def template_validation(request):
+        runtime = request['workspace']
+        store = runtime.store
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('请求格式错误')
-        return web.json_response(check_syntax(raw, app['mail_engine'].catalog()))
+        return web.json_response(check_syntax(raw, runtime.mailer.catalog()))
 
     async def templates(request):
-        engine = app['mail_engine']
+        runtime = request['workspace']
+        store = runtime.store
+        engine = runtime.mailer
         if request.method == 'GET':
             return web.json_response(engine.listed())
         raw = await request.json()
@@ -447,7 +472,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         return web.json_response({'ok': True})
 
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
-        web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
+        web.get('/admin', page), web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check), web.put('/api/auto-query', automatic_query),
         web.post('/api/templates/validate', template_validation),
         web.get('/api/templates', templates), web.post('/api/templates', templates),
@@ -458,6 +483,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         web.get('/api/roster',roster), web.put('/api/roster',roster),
         web.put('/api/roster/selection',roster), web.post('/api/layout/refresh',refresh_layout),
         web.get('/api/settings', settings), web.put('/api/settings', settings), web.get('/api/sheets', sheets)])
+    register_management(app)
     return app
 
 
