@@ -160,12 +160,44 @@ def validate_source(raw):
     return {k: r[k] for k in ('sheet_id', 'sheet_name', 'start_row', 'end_row')} | {'column':r['owner_column']}
 
 
+def colleague_name(value):
+    """Remove paired ASCII/full-width remarks, including nested remarks."""
+    result, stack = [], []
+    pairs = {')': '(', '）': '（'}
+    for char in value:
+        if char in '(（':
+            stack.append((char, len(result)))
+        elif char in pairs and stack and stack[-1][0] == pairs[char]:
+            _, start = stack.pop()
+            del result[start:]
+            continue
+        result.append(char)
+    return ''.join(result).strip()
+
+
+def colleague_names(values):
+    return list(dict.fromkeys(name for value in values if (name := colleague_name(value))))
+
+
+def migrate_roster(store):
+    roster = store.get('roster')
+    if not roster:
+        return
+    cleaned = roster | {'names': colleague_names(roster['names']),
+                        'excluded': colleague_names(roster.get('excluded', []))}
+    if cleaned != roster:
+        store.set('roster', cleaned)
+        snapshot = store.get('snapshot', {})
+        snapshot.update(stale=True, errors=[dict(rule='名单更新', message='姓名已更新，等待重新查询')])
+        store.set('snapshot', snapshot)
+
+
 def refresh_roster(source, names, previous=None):
-    names = list(dict.fromkeys(n.strip() for n in names if n.strip()))
+    names = colleague_names(names)
     if not names:
         raise ValueError('名单范围没有读取到姓名，请检查 Sheet、列和起止行')
     # Preserve exclusions across refreshes and reappearance; new names are selected.
-    excluded = (previous or {}).get('excluded', [])
+    excluded = colleague_names((previous or {}).get('excluded', []))
     return dict(source=source, names=names, excluded=excluded, updated_at=now())
 
 
@@ -217,4 +249,3 @@ def missing_tasks(rule, cells, merges, names):
                     sheet_id=rule['sheet_id'], sheet=rule['sheet_name'], item=rule['name'],
                     column=','.join(letters(c) for c in target_columns(rule)), rule_id=rule['id']))
     return result
-
