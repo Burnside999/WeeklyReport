@@ -78,3 +78,6 @@ details[open]>summary{padding-bottom:16px;border-bottom:1px solid var(--line)}
   h1{font-size:24px}
 }
 @media(prefers-reduced-motion:reduce){button,summary::before,.auto-query-toggle input::before{transition:none}}
+
+.syntax-invalid{border:2px solid #c62828!important}
+.syntax-warning{font-weight:700;margin:0 0 10px}

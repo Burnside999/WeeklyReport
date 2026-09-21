@@ -8,6 +8,7 @@ from datetime import date, datetime, time
 
 from .mail import SMTPConfig, SMTPMailer, DeliveryError, recipients_list
 from .variables import LOCAL_TZ, build_variables
+from .template_language import Program, TemplateSyntaxError
 
 TOKEN = re.compile(r'{{\s*([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)\s*}}')
 OPS = {'gt': operator.gt, 'lt': operator.lt, 'eq': operator.eq}
@@ -58,25 +59,27 @@ def typed_value(kind, value):
 
 
 def references(text, catalog):
-    keys = [m.group(1) for m in TOKEN.finditer(text)]
-    rest = TOKEN.sub('', text)
-    if '{{' in rest or '}}' in rest:
-        raise ValueError('变量格式不完整，请使用 {{变量名}}')
-    for key in keys:
-        if key not in catalog['values']:
-            raise ValueError('不存在的变量：' + key)
-    return keys
+    return sorted(Program(text, catalog).references)
 
 
 def render(text, catalog):
-    references(text, catalog)
-    def substitute(match):
-        key = match.group(1)
-        value = catalog['values'][key]
-        if value is None:
-            raise ValueError('变量当前值未知：' + key)
-        return str(value).lower() if isinstance(value, bool) else str(value)
-    return TOKEN.sub(substitute, text)
+    return Program(text, catalog).render()
+
+
+def check_syntax(raw, catalog):
+    errors, tokens = [], {}
+    for field, limit in [('subject', 300), ('body', 20000)]:
+        text = raw.get(field, '')
+        if not isinstance(text, str) or len(text) > limit:
+            errors.append(dict(field=field, message='模板内容格式错误或过长', line=1, column=1))
+            continue
+        try:
+            tokens[field] = [dict(start=len(text[:t['start']].encode('utf-16-le', errors='surrogatepass')) // 2,
+                                 end=len(text[:t['end']].encode('utf-16-le', errors='surrogatepass')) // 2)
+                             for t in Program(text, catalog).tokens]
+        except TemplateSyntaxError as exc:
+            errors.append(dict(field=field, **exc.detail()))
+    return dict(syntax_errors=errors, tokens=tokens)
 
 
 def resolve_time(schedule, catalog):
@@ -96,7 +99,7 @@ def resolve_time(schedule, catalog):
     return datetime.combine(day, clock, LOCAL_TZ)
 
 
-def validate_template(raw, catalog):
+def validate_template(raw, catalog, *, check_references=True):
     if not isinstance(raw, dict):
         raise ValueError('模板格式错误')
     result = {'recipients': recipients_list(raw.get('recipients'))}
@@ -106,7 +109,8 @@ def validate_template(raw, catalog):
             raise ValueError(f'邮件{label}须为 1–{limit} 字')
         if key == 'subject' and any(c in value for c in '\r\n'):
             raise ValueError('邮件标题不能换行')
-        references(value, catalog)
+        if check_references:
+            references(value, catalog)
         result[key] = value
     mode = raw.get('mode')
     if mode not in ('manual', 'auto'):
@@ -168,10 +172,29 @@ class MailEngine:
         last = self.store.get('snapshot', {}).get('last_success')
         if last and (current - datetime.fromisoformat(last)).total_seconds() > self.store.settings()['interval_seconds'] + 60:
             for key in catalog['values']:
-                if key.endswith(('.personcount', '.personlist')):
+                if key.endswith(('.personcount', '.personlist', '.people')):
                     catalog['values'][key] = None
             catalog['results_available'] = False
         return catalog
+
+    def describe(self, item, catalog=None):
+        catalog = catalog if catalog is not None else self.catalog()
+        errors = check_syntax(item, catalog)['syntax_errors']
+        if not errors:
+            try:
+                validate_template(item, catalog)
+            except ValueError as exc:
+                errors.append(dict(field='condition', message=str(exc), line=1, column=1))
+        return item | {'syntax_errors': errors}
+
+    def listed(self):
+        catalog = self.catalog()
+        return [self.describe(item, catalog) for item in self.items()]
+
+    def require_valid(self, item, catalog):
+        errors = self.describe(item, catalog)['syntax_errors']
+        if errors:
+            raise ValueError('存在语法错误：' + errors[0]['message'])
 
     def ensure_idle(self):
         if self.lock.locked():
@@ -190,7 +213,7 @@ class MailEngine:
 
     def save(self, raw, identifier=None):
         self.ensure_idle()
-        value = validate_template(raw, self.catalog())
+        value = validate_template(raw, self.catalog(), check_references=False)
         items = self.items()
         if identifier:
             previous = self.get(identifier)
@@ -209,7 +232,7 @@ class MailEngine:
             items.append(item)
         self.store.set('mail_templates', items)
         self.wake.set()
-        return item
+        return self.describe(item)
 
     def delete(self, identifier, revision):
         self.ensure_idle()
@@ -240,11 +263,14 @@ class MailEngine:
             if item['mode'] != 'manual' or raw.get('revision') != item['revision']:
                 raise TemplateConflict('模板已修改或不是手动模板，请刷新')
             current = self.clock()
+            catalog = self.catalog(current)
+            self.require_valid(item, catalog)
             self.recent(item, current, raw.get('confirm_attempt'))
-            await self.deliver(item, self.catalog(current), current)
+            await self.deliver(item, catalog, current)
             return item
 
     async def deliver(self, item, catalog, current):
+        self.require_valid(item, catalog)
         # Render everything from one snapshot before claiming a delivery attempt.
         subject, body = render(item['subject'], catalog), render(item['body'], catalog)
         if '\n' in subject or '\r' in subject or len(subject) > 998 or len(body) > 200000:
@@ -275,6 +301,7 @@ class MailEngine:
                 current, target = self.clock(), None
                 catalog = self.catalog(current)
                 try:
+                    self.require_valid(item, catalog)
                     target = resolve_time(item['schedule'], catalog)
                     cycle = stamp(target)
                     if item['cycle'] != cycle:
@@ -292,7 +319,7 @@ class MailEngine:
                         if not row or row['type'] not in COMPARABLE:
                             raise ValueError('触发变量已不存在或类型不适用，请编辑模板')
                         keys = references(item['subject'] + '\n' + item['body'], catalog) + [condition['variable']]
-                        if any(k.endswith(('.personcount', '.personlist')) for k in keys):
+                        if any(k.endswith(('.personcount', '.personlist', '.people')) for k in keys):
                             last = self.store.get('snapshot', {}).get('last_success')
                             if not last or datetime.fromisoformat(last) < target:
                                 raise ValueError('等待触发时间之后的一次成功表格查询')

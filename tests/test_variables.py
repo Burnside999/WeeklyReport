@@ -29,7 +29,7 @@ class VariableTests(unittest.IsolatedAsyncioTestCase):
         leap = build_variables(self.store, current=datetime(2024, 2, 29, tzinfo=timezone.utc))['values']
         self.assertEqual(leap['global.week.thursday'], '2024-02-29')
         self.assertEqual(leap['global.week.sunday'], '2024-03-03')
-        self.assertEqual(len(values), 34)
+        self.assertEqual(len(values), 36)
 
     def test_migration_stable_and_persisted(self):
         self.store.set('rules', [rule(), rule(id='r2', variable_name='listener1')])
@@ -100,7 +100,7 @@ class VariableWebTests(unittest.IsolatedAsyncioTestCase):
                 await client.put('/api/settings', json={'smtp_password':'TOPSECRET','access_token':'APITOKEN'}, headers=headers)
                 response = await client.get('/api/variables')
                 data = await response.json()
-                self.assertEqual(len(data['rows']), 44)
+                self.assertEqual(len(data['rows']), 47)
                 self.assertIn('ReportA.name', data['values'])
                 self.assertNotIn('listener1.name', data['values'])
                 self.assertNotIn('TOPSECRET', await response.text())
