@@ -15,23 +15,20 @@ from test_app import rule, cell, FakeClient
 
 
 class TaskTests(unittest.TestCase):
-    def test_colleague_remarks_and_deduplication(self):
-        for raw, expected in [('张三（休假）', '张三'), ('(分公司)李四', '李四'),
-                              (' 王五（分公司(休假)）(备注) ', '王五'),
-                              ('（休假）', ''), ('张（备注）三', '张三'),
-                              ('张三（未闭合', '张三（未闭合')]:
-            self.assertEqual(colleague_name(raw), expected)
-        roster = refresh_roster({}, ['张三（休假）','张三','(分公司)李四','（休假）'],
+    def test_colleague_parentheses_are_preserved(self):
+        for raw in ['张三（休假）', '(分公司)李四', ' 王五（分公司(休假)）(备注) ',
+                    '（休假）', '张（备注）三', '张三（未闭合']:
+            self.assertEqual(colleague_name(raw), raw.strip())
+        roster = refresh_roster({}, ['张三（休假）','张三','(分公司)李四','（休假）',' 张三（休假） '],
                                 {'excluded':['张三（休假）','张三','王五(分公司)']})
-        self.assertEqual(roster['names'], ['张三','李四'])
-        self.assertEqual(roster['excluded'], ['张三','王五'])
-        with self.assertRaises(ValueError):
-            refresh_roster({}, ['（休假）', '(分公司)'])
+        self.assertEqual(roster['names'], ['张三（休假）','张三','(分公司)李四','（休假）'])
+        self.assertEqual(roster['excluded'], ['张三（休假）','张三','王五(分公司)'])
 
-    def test_clean_names_are_used_for_task_statistics(self):
+    def test_full_names_are_used_for_task_statistics(self):
         roster = refresh_roster({}, ['张三（分公司）','张三(备注)','李四（休假）'])
-        rows = missing_tasks(rule(), {(2,1):cell('张三、李四')}, [], roster['names'])
-        self.assertEqual([row['person'] for row in rows], ['张三','李四'])
+        rows = missing_tasks(rule(), {(2,1):cell('张三（分公司）、李四（休假）'),
+                                      (3,1):cell('张三、李四')}, [], roster['names'])
+        self.assertEqual([row['person'] for row in rows], ['张三（分公司）','李四（休假）'])
 
     def test_existing_roster_migration_preserves_selection(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -42,10 +39,10 @@ class TaskTests(unittest.TestCase):
                 store.set('snapshot', {'stale':False, 'last_success':'old'})
                 migrate_roster(store)
                 roster = store.get('roster')
-                self.assertEqual(roster['names'], ['张三','李四'])
-                self.assertEqual(roster['excluded'], ['李四'])
+                self.assertEqual(roster['names'], ['张三(分公司)','张三','李四（休假）'])
+                self.assertEqual(roster['excluded'], ['李四（休假）'])
                 self.assertEqual(roster['updated_at'], 'old')
-                self.assertTrue(store.get('snapshot')['stale'])
+                self.assertFalse(store.get('snapshot')['stale'])
                 store.set('snapshot', {'stale':False})
                 migrate_roster(store)
                 self.assertFalse(store.get('snapshot')['stale'])
