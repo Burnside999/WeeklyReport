@@ -161,18 +161,8 @@ def validate_source(raw):
 
 
 def colleague_name(value):
-    """Remove paired ASCII/full-width remarks, including nested remarks."""
-    result, stack = [], []
-    pairs = {')': '(', '）': '（'}
-    for char in value:
-        if char in '(（':
-            stack.append((char, len(result)))
-        elif char in pairs and stack and stack[-1][0] == pairs[char]:
-            _, start = stack.pop()
-            del result[start:]
-            continue
-        result.append(char)
-    return ''.join(result).strip()
+    """Keep the source name intact apart from surrounding whitespace."""
+    return value.strip()
 
 
 def colleague_names(values):
