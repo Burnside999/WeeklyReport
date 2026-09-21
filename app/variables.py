@@ -3,10 +3,19 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from .core import letters, target_columns
+from .template_language import nest
 
 LOCAL_TZ = timezone(timedelta(hours=8), 'Asia/Shanghai')
 DAYS = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
 DAY_LABELS = ('一', '二', '三', '四', '五', '六', '日')
+
+
+LISTENER_SCHEMA = {
+    'name': 'string', 'sheetname': 'string', 'sheeturl': 'url',
+    'personcol': 'string', 'taskcol': 'string', 'startrow': 'integer',
+    'endrow': 'integer', 'enable': 'boolean', 'personcount': 'integer',
+    'personlist': 'string', 'people': ['string'],
+}
 
 
 def build_variables(store, running=False, current=None):
@@ -35,6 +44,7 @@ def build_variables(store, running=False, current=None):
     people = sorted({r['person'] for r in snapshot.get('records', [])}) if valid else None
     add('global.personcount', 'integer', '未交人数', len(people) if people is not None else None)
     add('global.personlist', 'string', '未交姓名', ','.join(people) if people is not None else None)
+    add('global.people', 'list', '未交姓名列表', people)
     health = 2 if running else 0 if snapshot.get('stale') else 1 if valid else None
     add('global.healthy', 'integer', '系统状态', health)
     last = snapshot.get('last_attempt')
@@ -58,7 +68,18 @@ def build_variables(store, running=False, current=None):
             add(f'{prefix}.{key}', kind, label, value)
         add(f'{prefix}.personcount', 'integer', '该规则未交人数', len(names) if names is not None else None)
         add(f'{prefix}.personlist', 'string', '该规则未交姓名', ','.join(names) if names is not None else None)
-    return dict(generated_at=current.isoformat(timespec='seconds'), timezone='Asia/Shanghai',
+        add(f'{prefix}.people', 'list', '未交姓名列表', names)
+    values = {r['name']: r['value'] for r in rows}
+    objects = nest(values)
+    listeners = [objects[r['variable_name']] for r in rules]
+    add('global.alllistener', 'list', '全部监听器', listeners)
+    values['global.alllistener'] = listeners
+    schema = nest({r['name']: r['type'] for r in rows})
+    schema['global']['people'] = ['string']
+    schema['global']['alllistener'] = [LISTENER_SCHEMA]
+    for rule in rules:
+        schema[rule['variable_name']] = LISTENER_SCHEMA
+    return dict(schema=schema, listener_names=[r['variable_name'] for r in rules], generated_at=current.isoformat(timespec='seconds'), timezone='Asia/Shanghai',
                 query_running=running, results_available=valid,
-                rows=rows, values={r['name']: r['value'] for r in rows})
+                rows=rows, values=values)
 

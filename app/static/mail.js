@@ -4,7 +4,8 @@
   const form = $('#template-form'), subject = $('#mail-subject'), body = $('#mail-body');
   let catalog = {rows: [], values: {}}, items = [], editing = null, loading = false, actionBusy = false;
   const sentThisPage = new Set();
-  const token = /{{\s*([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)\s*}}/g;
+  const token = /{{\s*([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*)\s*}}/g;
+  let validationTimer, validationVersion = 0, validTokens = {};
   const known = name => Object.prototype.hasOwnProperty.call(catalog.values, name);
   const comparable = new Set(['integer','boolean']);
   function highlight(input, mirror) {
@@ -12,20 +13,40 @@
     let start = 0;
     for (const match of text.matchAll(token)) {
       fragment.append(document.createTextNode(text.slice(start, match.index)));
-      fragment.append(el('span', match[0], known(match[1]) ? 'valid-variable' : 'invalid-variable'));
+      fragment.append(el('span', match[0], (known(match[1]) || validTokens[input.id]?.has(match.index)) ? 'valid-variable' : 'invalid-variable'));
       start = match.index + match[0].length;
     }
     fragment.append(document.createTextNode(text.slice(start) + '\n'));
     mirror.replaceChildren(fragment);
     mirror.scrollTop = input.scrollTop; mirror.scrollLeft = input.scrollLeft;
   }
-  function updateEditors() {
+  function errorText(errors) {
+    return errors.map(e=>`${{subject:'标题',body:'正文',condition:'触发规则'}[e.field] || ''} 第 ${e.line} 行，第 ${e.column} 列：${e.message}`).join('\n');
+  }
+  function paintEditors() {
     highlight(subject, $('#subject-highlight')); highlight(body, $('#body-highlight'));
-    const text = subject.value + '\n' + body.value;
-    const names = [...text.matchAll(token)].map(m => m[1]);
-    const invalid = [...new Set(names.filter(n => !known(n)))];
-    const incomplete = /{{|}}/.test(text.replace(token, ''));
-    $('#mail-editor-state').textContent = invalid.length ? '未知变量：' + invalid.join('、') : incomplete ? '变量格式未完成，请使用 {{变量名}}。' : '';
+  }
+  function updateEditors() {
+    validTokens = {};paintEditors();
+    clearTimeout(validationTimer);
+    const version = ++validationVersion;
+    validationTimer = setTimeout(()=>validateEditors(version),250);
+  }
+  async function validateEditors(version) {
+    const subjectText=subject.value, bodyText=body.value;
+    try {
+      const result=await api('templates/validate','POST',{subject:subjectText,body:bodyText});
+      if(version!==validationVersion || subjectText!==subject.value || bodyText!==body.value || form.hidden)return;
+      validTokens={'mail-subject':new Set((result.tokens.subject || []).map(t=>t.start)),
+        'mail-body':new Set((result.tokens.body || []).map(t=>t.start))};
+      const invalid=result.syntax_errors.length>0, state=$('#mail-editor-state');
+      form.classList.toggle('syntax-invalid',invalid);
+      state.textContent=invalid?'❗存在语法错误':'';
+      state.title=errorText(result.syntax_errors);state.classList.toggle('error',invalid);
+      paintEditors();
+    } catch(error) {
+      if(version===validationVersion && !form.hidden)$('#mail-editor-state').textContent='校验失败：'+error.message;
+    }
   }
   for (const [input, mirror] of [[subject,$('#subject-highlight')],[body,$('#body-highlight')]]) {
     input.addEventListener('input', updateEditors);
@@ -77,7 +98,7 @@
   $('#condition-variable').onchange=conditionInput;
   async function edit(item=null) {
     try {catalog=await api('variables');populateVariables();} catch(error){toast(error.message);return;}
-    editing=item;form.reset();form.hidden=false;
+    editing=item;form.reset();form.hidden=false;form.classList.remove('syntax-invalid');$('#mail-editor-state').textContent='';
     $('#template-form-title').textContent=item?'编辑邮件模板':'新建邮件模板';
     $('#mail-recipients').replaceChildren();for(const address of item?.recipients || ['']) recipient(address);
     subject.value=item?.subject || '';body.value=item?.body || '';form.elements.mail_mode.value=item?.mode || 'manual';
@@ -113,6 +134,12 @@
     if(!items.length) {const empty=el('div',undefined,'empty panel');empty.append(el('h3','还没有邮件模板'),el('p','新建模板，选择接收人并编写邮件。'));list.append(empty);}
     for(const item of items) {
       const card=el('article',undefined,'rule-card'), heading=el('div',undefined,'rule-top');
+      const syntaxErrors=item.syntax_errors || [];
+      card.classList.toggle('syntax-invalid',syntaxErrors.length>0);
+      if(syntaxErrors.length) {
+        const warning=el('p','❗存在语法错误','error syntax-warning');
+        warning.title=errorText(syntaxErrors);warning.setAttribute('role','status');card.append(warning);
+      }
       heading.append(el('h3',item.subject),el('span',item.mode==='auto'?'自动触发':'手动触发','badge'));card.append(heading);
       card.append(el('p',item.recipients.join('、'),'rule-meta'),el('p','上次触发：'+mailTime(item.last_trigger),'help'));
       if(item.last_success)card.append(el('p','上次发送成功：'+mailTime(item.last_success),'help'));
@@ -125,13 +152,14 @@
       const completed=item.status==='sent' || item.status==='error';
       const label=item.status==='sending'?'发送中…':item.mode==='auto'?(completed?'重置自动触发':'等待自动触发'):(sentThisPage.has(item.id)?'发送成功':'发送邮件');
       const send=el('button',label,'primary');
-      send.disabled=actionBusy || item.status==='sending' || (item.mode==='auto'?!completed:sentThisPage.has(item.id));
+      if(syntaxErrors.length)send.title=errorText(syntaxErrors);
+      send.disabled=syntaxErrors.length>0 || actionBusy || item.status==='sending' || (item.mode==='auto'?!completed:sentThisPage.has(item.id));
       editButton.disabled=remove.disabled=actionBusy || item.status==='sending';
       send.onclick=()=>trigger(item);actions.append(tools,send);card.append(actions);list.append(card);
     }
   }
   async function trigger(item) {
-    if(actionBusy)return;
+    if(actionBusy || item.syntax_errors?.length)return;
     actionBusy=true;renderList();
     try {
       if(item.mode==='auto') {
@@ -150,7 +178,7 @@
   }
   async function load() {
     if(loading)return;loading=true;
-    try {items=await api('templates');$('#mail-load-state').textContent='';renderList();}
+    try {items=await api('templates');$('#mail-load-state').textContent='';renderList();if(!form.hidden)updateEditors();}
     catch(error){$('#mail-load-state').textContent='模板读取失败：'+error.message;toast(error.message);}
     finally{loading=false;}
   }

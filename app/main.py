@@ -15,7 +15,7 @@ from .core import (Store, doc_id, integer, now, validate_rule,
                    written_text, target_columns, task_ranges, missing_tasks,
                    validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables, migrate_roster)
 from .variables import build_variables
-from .templates import MailEngine, TemplateConflict
+from .templates import MailEngine, TemplateConflict, check_syntax
 from .mail import DeliveryError, email_address
 from .tencent import TencentClient, TencentError
 
@@ -415,10 +415,16 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         app['monitor'].wake.set()
         return web.json_response({'updated_at':result['updated_at']})
 
+    async def template_validation(request):
+        raw = await request.json()
+        if not isinstance(raw, dict):
+            raise ValueError('请求格式错误')
+        return web.json_response(check_syntax(raw, app['mail_engine'].catalog()))
+
     async def templates(request):
         engine = app['mail_engine']
         if request.method == 'GET':
-            return web.json_response(engine.items())
+            return web.json_response(engine.listed())
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('请求格式错误')
@@ -443,6 +449,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
         web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check), web.put('/api/auto-query', automatic_query),
+        web.post('/api/templates/validate', template_validation),
         web.get('/api/templates', templates), web.post('/api/templates', templates),
         web.put('/api/templates/{id}', templates), web.delete('/api/templates/{id}', templates),
         web.post('/api/templates/{id}/{action}', templates),

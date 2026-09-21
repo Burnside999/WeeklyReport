@@ -137,7 +137,7 @@ async function loadVariables() {
       name.append(el('code', row.name, 'variable-code'));
       if (row.value === null) value.append(el('span', 'null', 'muted'));
       else if (row.value === '') value.append(el('span', '空', 'muted'));
-      else value.textContent = String(row.value);
+      else value.textContent = typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value);
       tr.append(name, el('td', row.type), el('td', row.description), value);
       ['变量名', '类型', '描述', '值'].forEach((label, i) => tr.children[i].dataset.label = label);
       fragment.append(tr);
