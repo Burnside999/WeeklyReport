@@ -40,9 +40,17 @@ async function refresh() {
       for(const error of s.errors || []) $('#errors').append(el('p', `${error.rule}：${error.message}`));
     }
     $('#records').replaceChildren();
-    for(const r of records) {
+    const groups = new Map();
+    for(const [index, record] of records.entries()) {
+      const key = record.rule_id ? JSON.stringify([record.rule_id, record.person]) : `legacy:${index}`;
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(record);
+    }
+    for(const tasks of groups.values()) {
+      const r = tasks[0];
       const tr = el('tr'), owner = el('td', r.person), item = el('td',r.item), sheet = el('td');
-      item.append(el('small',`${r.column} 列 · 第 ${r.row}${r.end_row && r.end_row!==r.row?'–'+r.end_row:''} 行 · 未填写`));
+      owner.append(el('small',`${tasks.length} 项未填`));
+      for(const task of tasks) item.append(el('small',`${task.column} 列 · 第 ${task.row}${task.end_row && task.end_row!==task.row?'–'+task.end_row:''} 行`));
       const link = el('a',r.sheet); link.href = s.document_url.split('?')[0] + '?tab=' + encodeURIComponent(r.sheet_id); link.target='_blank'; link.rel='noopener noreferrer'; sheet.append(link);
       tr.append(owner,item,sheet); $('#records').append(tr);
     }

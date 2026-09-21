@@ -20,6 +20,30 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.reload();await page.locator('#auto-query:not(:disabled)').waitFor();
     assert(!(await autoQuery.isChecked()));assert(!(await page.locator('#check').isDisabled()));
     await autoQuery.check();await page.locator('#schedule').filter({hasText:'自动检查'}).waitFor();
+    // The same person is grouped within one rule, even when records interleave.
+    // Identically named rules must remain separate; totals still count tasks.
+    await page.route('**/api/status', async route=>{
+      const response=await route.fetch(), data=await response.json();
+      const record={person:'张三',item:'周报',sheet:'研发',sheet_id:'tab1',column:'C',row:2,end_row:2,rule_id:'r1'};
+      Object.assign(data,{last_success:'2026-09-18T10:00:00+08:00',stale:false,people_count:2,rule_count:2,
+        document_url:'https://docs.qq.com/sheet/test',records:[record,{...record,person:'李四',row:3,end_row:3},
+        {...record,row:4,end_row:6,column:'C,D'}, {...record,rule_id:'r2',row:7,end_row:7}]});
+      await route.fulfill({response,json:data});
+    });
+    await page.reload();await page.locator('#records tr').nth(2).waitFor();
+    assert.equal(await page.locator('#records tr').count(),3);
+    assert.equal(await page.locator('#records tr').first().locator('td').first().textContent(),'张三2 项未填');
+    assert.deepEqual(await page.locator('#records tr').first().locator('td').nth(1).locator('small').allTextContents(),['C 列 · 第 2 行','C,D 列 · 第 4–6 行']);
+    assert.equal(await page.locator('#records tr').nth(2).locator('td').first().textContent(),'张三1 项未填');
+    assert.equal(await page.locator('#records a').first().getAttribute('href'),'https://docs.qq.com/sheet/test?tab=tab1');
+    assert.equal(await page.locator('#people').textContent(),'2');
+    assert.equal(await page.locator('#detail-count').textContent(),'4 条');
+    for(const width of [320,390,1280]) {
+      await page.setViewportSize({width,height:844});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`grouped records overflow at ${width}`);
+    }
+    await page.setViewportSize({width:390,height:844});
+    await page.unroute('**/api/status');
     await page.locator('#nav-mail').click();await page.getByText('还没有邮件模板',{exact:true}).waitFor();
     assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表']);
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
