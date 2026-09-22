@@ -29,12 +29,12 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     const cookies=(await context.cookies()).filter(c=>c.name==='wr_remember');assert.equal(cookies.length,1);assert(cookies[0].httpOnly);
     const next=await browser.newContext();await next.addCookies(cookies);const tab=await next.newPage();
     await tab.goto(base+'/');await tab.waitForURL(u=>u.pathname==='/' && u.searchParams.has('doc'));await tab.locator('#logout').click();
-    await tab.waitForURL(u=>u.pathname==='/login');await tab.waitForFunction(()=>document.querySelector('#username').value==='admin');
+    await tab.waitForURL(u=>u.pathname==='/login');await tab.locator('#login button:not(:disabled)').waitFor();assert.equal(await tab.locator('#username').inputValue(),'admin');
     assert(await tab.locator('#remember').isChecked());assert(!(await tab.locator('#automatic').isChecked()));assert.equal(await tab.locator('#password').inputValue(),'');
     await tab.locator('#login button').click();await tab.waitForURL(u=>u.pathname==='/');
-    await tab.locator('#logout').click();await tab.waitForURL(u=>u.pathname==='/login');await tab.waitForFunction(()=>document.querySelector('#remember').checked);
-    await tab.locator('#remember').uncheck();await tab.waitForFunction(()=>!document.querySelector('#login button').disabled);await tab.reload();
-    await tab.waitForFunction(()=>!document.querySelector('#login button').disabled);assert.equal(await tab.locator('#username').inputValue(),'');assert(await tab.locator('#password').evaluate(e=>e.required));
+    await tab.locator('#logout').click();await tab.waitForURL(u=>u.pathname==='/login');await tab.locator('#remember:checked').waitFor();
+    await tab.locator('#remember').uncheck();await tab.locator('#login button:not(:disabled)').waitFor();await tab.reload();
+    await tab.locator('#login button:not(:disabled)').waitFor();assert.equal(await tab.locator('#username').inputValue(),'');assert(await tab.locator('#password').evaluate(e=>e.required));
     await tab.emulateMedia({reducedMotion:'reduce'});assert.equal(await tab.locator('.login-box').evaluate(e=>getComputedStyle(e).animationName),'none');
     assert.deepEqual(errors,[]);console.log('Encrypted login, remember/auto dependencies, browser restart, logout, forget and responsive header: PASS');
     await next.close();await context.close();

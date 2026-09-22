@@ -24,7 +24,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     const context=await browser.newContext({viewport:{width:390,height:844}}), alice=await context.newPage();alice.on('pageerror',e=>errors.push(String(e)));
     await login(alice,'alice');await alice.locator('#create-first-document').waitFor();
     assert(await alice.locator('.bottom-nav').isHidden());assert(await alice.locator('#nav-admin').isHidden());
-    await alice.locator('#create-first-document').click();
+    await alice.locator('#create-first-document').click();await alice.locator('#document-dialog').waitFor();
     assert.equal(await alice.locator('#document-form [name=name]').inputValue(),'文档1');
     assert(await alice.locator('#document-credentials').isVisible());
     await alice.locator('#document-form [name=url]').fill('https://docs.qq.com/sheet/NOTSHEET');
@@ -34,8 +34,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await alice.locator('#document-form button[type=submit]').click();await alice.locator('#document-select').waitFor();
     const first=await alice.locator('#document-select').inputValue();assert(first);
     await alice.locator('#nav-manage').click();await alice.locator('#add-rule').click();
-    await alice.locator('#rule-form [name=name]').fill('Alice rule');await alice.locator('#rule-form [name=sheet_id]').fill('tab1');
+    await alice.locator('#rule-form [name=name]').fill('Alice rule');await alice.locator('#rule-form [name=sheet_id]').selectOption('tab1');
     await alice.locator('#rule-form button[type=submit]').click();await alice.locator('#rule-form').waitFor({state:'hidden'});
+    await alice.locator('#rules-list article').waitFor();
     assert.equal(await alice.locator('#rules-list article').count(),1);
     assert.equal(await alice.locator('#document-select option:checked').textContent(),'文档1 · 1个规则');
     await alice.locator('#rules-list input[type=checkbox]').uncheck();
@@ -61,7 +62,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await alice.locator('#settings details.advanced summary').click();await alice.locator('#settings [name=access_token]').fill('updated-token');
     await alice.getByRole('button',{name:'保存高级设置',exact:true}).click();await alice.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
     await otherTab.goto(base+'/settings?doc='+first);await otherTab.locator('#settings details.advanced summary').click();
-    await otherTab.waitForFunction(()=>document.querySelector('#settings [name=access_token]').value==='updated-token');
+    const tokenInput=otherTab.locator('#settings [name=access_token]');
+    for(let i=0;i<100 && await tokenInput.inputValue()!=='updated-token';i++)await new Promise(resolve=>setTimeout(resolve,50));
+    assert.equal(await tokenInput.inputValue(),'updated-token');
     // Document-local templates are empty despite admin having its own data.
     await alice.locator('#nav-mail').click();await alice.getByText('还没有邮件模板',{exact:true}).waitFor();
     // Duplicate name creation fails and leaves the selected manager intact.

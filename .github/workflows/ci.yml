@@ -21,6 +21,7 @@ jobs:
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_mail.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_accounts.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_login.cjs
+          PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_distribution.cjs
       - run: docker compose config --quiet
         env:
           ADMIN_PASSWORD: ci-only-password-not-for-production

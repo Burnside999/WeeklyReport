@@ -36,7 +36,9 @@ async function refresh() {
       const r = tasks[0];
       const tr = el('tr'), owner = el('td', r.person), item = el('td',r.item), sheet = el('td');
       owner.append(el('small',`${tasks.length} 项未填`));
-      for(const task of tasks) item.append(el('small',`${task.column} 列 · 第 ${task.row}${task.end_row && task.end_row!==task.row?'–'+task.end_row:''} 行`));
+      for(const task of tasks) item.append(el('small',task.distribution==='row'
+        ? `第 ${task.rows.replaceAll(',','、')} 行 · ${task.column}${task.end_column!==task.column?'–'+task.end_column:''} 列`
+        : `${task.column} 列 · 第 ${task.row}${task.end_row && task.end_row!==task.row?'–'+task.end_row:''} 行`));
       const link = el('a',r.sheet); link.href = s.document_url.split('?')[0] + '?tab=' + encodeURIComponent(r.sheet_id); link.target='_blank'; link.rel='noopener noreferrer'; sheet.append(link);
       tr.append(owner,item,sheet); $('#records').append(tr);
     }
@@ -58,14 +60,50 @@ $('#auto-query').onchange = async event => {
   catch(err) {toggle.checked=!enabled;toast(err.message);}
   finally {togglingAuto=false;toggle.disabled=false;await refresh();}
 };
-const form=$('#rule-form');
+const form=$('#rule-form'),sourceForm=$('#source-form');
+const sheetLoads=new Map();
+function setDistribution(f,value=f.elements.distribution.value) {
+  f.elements.distribution.value=value;
+  for(const fields of f.querySelectorAll('.axis-fields'))fields.hidden=fields.disabled=fields.dataset.distribution!==value;
+}
+for(const f of [form,sourceForm])for(const radio of f.querySelectorAll('[name=distribution]'))radio.onchange=()=>setDistribution(f);
+async function loadSheetOptions(select,button,selected=select.value) {
+  const version=(sheetLoads.get(select)||0)+1;sheetLoads.set(select,version);
+  select.replaceChildren(new Option('正在读取工作表…',''));button.disabled=true;
+  try {
+    const sheets=await api('sheets');
+    if(sheetLoads.get(select)!==version)return;
+    select.replaceChildren(new Option(sheets.length?'请选择工作表':'没有可选工作表',''));
+    for(const sheet of sheets)select.append(new Option(sheet.title,sheet.sheetId));
+    select.value=sheets.some(sheet=>sheet.sheetId===selected)?selected:'';
+  } catch(error) {
+    if(sheetLoads.get(select)!==version)return;
+    select.replaceChildren(new Option('读取失败，请刷新工作表列表',''));toast(error.message);
+  } finally {if(sheetLoads.get(select)===version)button.disabled=false;}
+}
+function sheetBody(f) {
+  const body=Object.fromEntries(new FormData(f));
+  body.sheet_name=f.elements.sheet_id.selectedOptions[0]?.textContent || '';
+  return body;
+}
 function edit(rule) {
-  form.reset(); form.hidden=false; $('#form-title').textContent=rule?'编辑监听规则':'添加监听规则';
-  for(const key of ['id','name','variable_name','sheet_id','sheet_name','owner_column','start_row','end_row']) if(rule) form.elements[key].value = key.endsWith('column') ? col(rule[key]) : rule[key];
-  form.elements.target_columns.value=rule?(rule.target_columns || [rule.target_column]).map(col).join(','):'B';
-  if(!rule) form.elements.id.value='';
-  form.elements.enabled.checked=rule ? rule.enabled : true;
-  $('#sheet-select').value=''; form.scrollIntoView({behavior:'smooth',block:'start'});
+  form.reset();form.hidden=false;$('#form-title').textContent=rule?'编辑监听规则':'添加监听规则';
+  setDistribution(form,rule?.distribution || 'column');
+  if(rule) {
+    for(const key of ['id','name','variable_name','owner_column','start_row','end_row','owner_row','start_column','end_column']) {
+      if(rule[key]!==undefined)form.elements[key].value=key.endsWith('column')?col(rule[key]):rule[key];
+    }
+    if(rule.distribution==='row')form.elements.target_rows.value=rule.target_rows.join(',');
+    else form.elements.target_columns.value=(rule.target_columns || [rule.target_column]).map(col).join(',');
+  } else form.elements.id.value='';
+  form.elements.enabled.checked=rule?rule.enabled:true;
+  loadSheetOptions($('#sheet-select'),$('#load-sheets'),rule?.sheet_id || '');
+  form.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function ruleDescription(r) {
+  return r.distribution==='row'
+    ? `${r.sheet_name} · 行分布 · 责任人第 ${r.owner_row} 行 → 检查第 ${r.target_rows.join('、')} 行 · ${col(r.start_column)}–${col(r.end_column)} 列`
+    : `${r.sheet_name} · 列分布 · 责任人 ${col(r.owner_column)} 列 → 检查 ${(r.target_columns || [r.target_column]).map(col).join('、')} 列 · 第 ${r.start_row}–${r.end_row} 行`;
 }
 $('#add-rule').onclick=()=>edit(); $('#cancel-rule').onclick=()=>form.hidden=true;
 async function renderRules() {
@@ -74,11 +112,11 @@ async function renderRules() {
   if(current)current.enabled_rule_count=allRules.filter(r=>r.enabled).length;
   showDocuments({documents:documentList});
   $('#rules-list').replaceChildren();
-  if(!allRules.length) {const box=el('div',undefined,'empty panel');box.append(el('h3','从第一条规则开始'),el('p','选择工作表、责任人列和需要填写的列。'));$('#rules-list').append(box);}
+  if(!allRules.length) {const box=el('div',undefined,'empty panel');box.append(el('h3','从第一条规则开始'),el('p','选择工作表、分布方式和需要填写的范围。'));$('#rules-list').append(box);}
   for(const r of allRules) {
     const card=el('article',undefined,'rule-card'), top=el('div',undefined,'rule-top');
     top.append(el('h3',r.name),el('span',r.enabled?'监听中':'已暂停','badge '+(r.enabled?'good':'')));
-    card.append(top,el('code',r.variable_name,'variable-code'),el('p',`${r.sheet_name} · 责任人 ${col(r.owner_column)} 列 → 检查 ${(r.target_columns || [r.target_column]).map(col).join('、')} 列 · 第 ${r.start_row}–${r.end_row} 行`,'rule-meta'));
+    card.append(top,el('code',r.variable_name,'variable-code'),el('p',ruleDescription(r),'rule-meta'));
     const actions=el('div',undefined,'rule-actions'), label=el('label',undefined,'checkbox'), toggle=el('input');toggle.type='checkbox';toggle.checked=r.enabled;label.append(toggle,document.createTextNode('启用'));
     toggle.onchange=async()=>{toggle.disabled=true;try{await api('rules/'+r.id,'PUT',{...r,enabled:toggle.checked});await renderRules();}catch(err){toggle.checked=r.enabled;toggle.disabled=false;toast(err.message);}};
     const buttons=el('div'), editButton=el('button','编辑','quiet'), del=el('button','删除','quiet danger');
@@ -86,9 +124,8 @@ async function renderRules() {
     buttons.append(editButton,del);actions.append(label,buttons);card.append(actions);$('#rules-list').append(card);
   }
 }
-form.onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(form));body.enabled=form.elements.enabled.checked;const id=body.id;delete body.id;const button=form.querySelector('[type=submit]');button.disabled=true;try{await api('rules'+(id?'/'+id:''),id?'PUT':'POST',body);form.hidden=true;await renderRules();toast('规则已保存');}catch(err){toast(err.message);}finally{button.disabled=false;}};
-$('#load-sheets').onclick=async()=>{const b=$('#load-sheets');b.disabled=true;b.textContent='读取中…';try{const sheets=await api('sheets');$('#sheet-select').replaceChildren(new Option('请选择工作表',''));for(const s of sheets){const o=new Option(s.title,s.sheetId);$('#sheet-select').append(o);}toast(`已读取 ${sheets.length} 个工作表`);}catch(err){toast(err.message);}finally{b.disabled=false;b.textContent='从腾讯文档读取工作表';}};
-$('#sheet-select').onchange=e=>{if(e.target.value){form.elements.sheet_id.value=e.target.value;form.elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
+form.onsubmit=async e=>{e.preventDefault();const body=sheetBody(form);body.enabled=form.elements.enabled.checked;const id=body.id;delete body.id;const button=form.querySelector('[type=submit]');button.disabled=true;try{await api('rules'+(id?'/'+id:''),id?'PUT':'POST',body);form.hidden=true;await renderRules();toast('规则已保存');}catch(err){toast(err.message);}finally{button.disabled=false;}};
+$('#load-sheets').onclick=()=>loadSheetOptions($('#sheet-select'),$('#load-sheets'));
 async function loadSettings(){
   const s=await api('settings'),f=$('#settings-form');
   for(const key of ['document_name','document_url','interval_seconds','timeout_seconds','client_id','open_id','access_token']) f.elements[key].value=s[key];
@@ -101,7 +138,11 @@ else if(page === 'home'){refresh();setInterval(refresh,5000);document.addEventLi
 
 async function loadRoster() {
   const roster=await api('roster'), f=$('#source-form');
-  if(roster.source) for(const key of ['sheet_id','sheet_name','column','start_row','end_row']) f.elements[key].value=key==='column'?col(roster.source[key]):roster.source[key];
+  setDistribution(f,roster.source?.distribution || 'column');
+  if(roster.source)for(const key of ['column','start_row','end_row','row','start_column','end_column']) {
+    if(roster.source[key]!==undefined)f.elements[key].value=key.endsWith('column')?col(roster.source[key]):roster.source[key];
+  }
+  if(!sheetLoads.has($('#source-sheet-select')))await loadSheetOptions($('#source-sheet-select'),$('#source-load-sheets'),roster.source?.sheet_id || '');
   $('#roster-names').replaceChildren();
   for(const name of roster.names || []) {
     const label=el('label',undefined,'checkbox'), check=el('input');check.type='checkbox';check.value=name;check.checked=!(roster.excluded || []).includes(name);label.append(check,document.createTextNode(name));$('#roster-names').append(label);
@@ -110,12 +151,8 @@ async function loadRoster() {
   $('#roster-state').textContent=roster.source?`${roster.names.length} 位同事 · 已选择 ${roster.names.filter(n=>!roster.excluded.includes(n)).length} 人 · 名单更新 ${date(roster.updated_at)}`:'尚未配置名单';
   const status=await api('status');$('#layout-state').textContent='上次同步：'+date(status.layout_updated_at);
 }
-$('#source-load-sheets').onclick=async()=>{
-  const b=$('#source-load-sheets');b.disabled=true;
-  try{const sheets=await api('sheets');$('#source-sheet-select').replaceChildren(new Option('请选择名单工作表',''));for(const s of sheets)$('#source-sheet-select').append(new Option(s.title,s.sheetId));toast(`已读取 ${sheets.length} 个工作表`);}catch(e){toast(e.message);}finally{b.disabled=false;}
-};
-$('#source-sheet-select').onchange=e=>{if(e.target.value){$('#source-form').elements.sheet_id.value=e.target.value;$('#source-form').elements.sheet_name.value=e.target.selectedOptions[0].textContent;}};
-$('#source-form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('[type=submit]');b.disabled=true;try{await api('roster','PUT',Object.fromEntries(new FormData(e.target)));await loadRoster();toast('名单已更新');}catch(e){toast(e.message);}finally{b.disabled=false;}};
+$('#source-load-sheets').onclick=()=>loadSheetOptions($('#source-sheet-select'),$('#source-load-sheets'));
+$('#source-form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('[type=submit]');b.disabled=true;try{await api('roster','PUT',sheetBody(e.target));await loadRoster();toast('名单已更新');}catch(e){toast(e.message);}finally{b.disabled=false;}};
 $('#select-all').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=true);
 $('#select-none').onclick=()=>$('#roster-names').querySelectorAll('input').forEach(c=>c.checked=false);
 $('#save-selection').onclick=async()=>{const b=$('#save-selection');b.disabled=true;try{const selected=[...$('#roster-names').querySelectorAll('input:checked')].map(c=>c.value);await api('roster/selection','PUT',{selected});await loadRoster();toast('统计范围已保存');}catch(e){toast(e.message);}finally{b.disabled=false;}};

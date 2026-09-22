@@ -12,7 +12,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 from .core import (Store, doc_id, integer, now, validate_rule,
-                   written_text, target_columns, task_ranges, missing_tasks,
+                   written_text, target_columns, task_ranges, missing_tasks, task_identity, is_row, rule_axes, source_axes, oriented_merges,
                    validate_source, refresh_roster, variable_name, allocate_variable, migrate_variables, migrate_roster)
 from .variables import build_variables
 from .templates import MailEngine, TemplateConflict, check_syntax
@@ -55,10 +55,12 @@ class Monitor:
                         source = roster['source']
                         source_meta = metadata.get(source['sheet_id'])
                         if not source_meta:
-                            raise TencentError('名单 Sheet 已不存在，请重新选择数据源')
-                        names_cells = await self.client.read_column(fid, source['sheet_id'], source['column'], source['start_row'], source['end_row'], headers)
+                            raise TencentError('名单工作表已不存在，请重新选择数据源')
+                        source_axis, source_start, source_end = source_axes(source)
+                        reader = self.client.read_row if is_row(source) else self.client.read_column
+                        names_cells = await reader(fid,source['sheet_id'],source_axis,source_start,source_end,headers)
                         roster = refresh_roster(source | {'sheet_name':source_meta['title']},
-                            [written_text(names_cells.get(r)) for r in range(source['start_row'],source['end_row']+1)], roster)
+                            [written_text(names_cells.get(r)) for r in range(source_start,source_end+1)], roster)
                         self.store.set('roster',roster)
                         names = [n for n in roster['names'] if n not in roster['excluded']]
                         layout = await self.client.layout(fid,headers,metadata) if names else {'sheets':{}}
@@ -67,26 +69,30 @@ class Monitor:
                             try:
                                 meta = metadata.get(rule['sheet_id'])
                                 if meta is None:
-                                    raise TencentError('工作表不存在，请重新选择 Sheet')
+                                    raise TencentError('工作表不存在，请重新选择工作表')
                                 rule = rule | {'sheet_name':meta['title']}
-                                total = meta.get('rowTotal')
+                                horizontal = is_row(rule)
+                                axes = rule_axes(rule)
+                                total = meta.get('columnTotal' if horizontal else 'rowTotal')
                                 if isinstance(total,int) and total>0:
-                                    if rule['start_row']>total:
-                                        raise TencentError('起始行超出工作表范围')
-                                    rule = rule | {'end_row':min(rule['end_row'],total)}
+                                    if axes['start_row']>total:
+                                        raise TencentError('起始列超出工作表范围' if horizontal else '起始行超出工作表范围')
+                                    rule = rule | {('end_column' if horizontal else 'end_row'):min(axes['end_row'],total)}
+                                    axes = rule_axes(rule)
                                 merges = layout['sheets'][rule['sheet_id']]
                                 spans = task_ranges(rule,merges)
-                                cols = set(target_columns(rule)) | {rule['owner_column']} | {x[2] for x in spans}
-                                # Read anchors of horizontally merged target cells too.
-                                for top,bottom,left,right in merges:
-                                    if top<=rule['end_row'] and bottom>=rule['start_row'] and any(left<=c<=right for c in target_columns(rule)):
-                                        cols.add(left)
+                                tracks = set(target_columns(axes)) | {axes['owner_column']} | {x[2] for x in spans}
+                                # Include merged-cell anchors on the opposite axis too.
+                                for top,bottom,left,right in oriented_merges(rule,merges):
+                                    if top<=axes['end_row'] and bottom>=axes['start_row'] and any(left<=c<=right for c in target_columns(axes)):
+                                        tracks.add(left)
                                 cells = {}
-                                for col in sorted(cols):
-                                    key = (rule['sheet_id'], col, rule['start_row'], rule['end_row'])
+                                reader = self.client.read_row if horizontal else self.client.read_column
+                                for track in sorted(tracks):
+                                    key = (horizontal,rule['sheet_id'],track,axes['start_row'],axes['end_row'])
                                     if key not in cache:
-                                        cache[key] = await self.client.read_column(fid,*key,headers)
-                                    cells.update({(row,col):value for row,value in cache[key].items()})
+                                        cache[key] = await reader(fid,*key[1:],headers)
+                                    cells.update({((track,index) if horizontal else (index,track)):value for index,value in cache[key].items()})
                                 results.extend(missing_tasks(rule,cells,merges,names))
                             except (TencentError, ValueError) as exc:
                                 errors.append(dict(rule=rule['name'], message=str(exc)))
@@ -111,7 +117,7 @@ class Monitor:
                     seen = set()
                     unique = []
                     for r in results:
-                        key = (r['person'], r['sheet_id'], r['row'], r['end_row'], r['column'])
+                        key = task_identity(r)
                         if key not in seen:
                             seen.add(key)
                             unique.append(r)
