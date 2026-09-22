@@ -102,7 +102,7 @@ class VariableWebTests(unittest.IsolatedAsyncioTestCase):
                 await client.put('/api/admin/smtp', json={'smtp_password':'TOPSECRET'}, headers=headers)
                 response = await client.get('/api/variables')
                 data = await response.json()
-                self.assertEqual(len(data['rows']), 47)
+                self.assertEqual(len(data['rows']), 48)
                 self.assertIn('ReportA.name', data['values'])
                 self.assertNotIn('listener1.name', data['values'])
                 self.assertNotIn('TOPSECRET', await response.text())

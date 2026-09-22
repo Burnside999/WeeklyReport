@@ -24,7 +24,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     const context=await browser.newContext({viewport:{width:390,height:844}}), alice=await context.newPage();alice.on('pageerror',e=>errors.push(String(e)));
     await login(alice,'alice');await alice.locator('#create-first-document').waitFor();
     assert(await alice.locator('.bottom-nav').isHidden());assert(await alice.locator('#nav-admin').isHidden());
-    await alice.locator('#create-first-document').click();
+    await alice.locator('#create-first-document').click();await alice.locator('#document-dialog').waitFor();
     assert.equal(await alice.locator('#document-form [name=name]').inputValue(),'文档1');
     assert(await alice.locator('#document-credentials').isVisible());
     await alice.locator('#document-form [name=url]').fill('https://docs.qq.com/sheet/NOTSHEET');
@@ -34,8 +34,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await alice.locator('#document-form button[type=submit]').click();await alice.locator('#document-select').waitFor();
     const first=await alice.locator('#document-select').inputValue();assert(first);
     await alice.locator('#nav-manage').click();await alice.locator('#add-rule').click();
-    await alice.locator('#rule-form [name=name]').fill('Alice rule');await alice.locator('#rule-form [name=sheet_id]').fill('tab1');
+    await alice.locator('#rule-form [name=name]').fill('Alice rule');await alice.locator('#rule-form [name=sheet_id]').selectOption('tab1');
     await alice.locator('#rule-form button[type=submit]').click();await alice.locator('#rule-form').waitFor({state:'hidden'});
+    await alice.locator('#rules-list article').waitFor();
     assert.equal(await alice.locator('#rules-list article').count(),1);
     assert.equal(await alice.locator('#document-select option:checked').textContent(),'文档1 · 1个规则');
     await alice.locator('#rules-list input[type=checkbox]').uncheck();

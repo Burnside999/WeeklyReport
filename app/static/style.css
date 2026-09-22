@@ -102,3 +102,5 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 @view-transition{navigation:auto}::view-transition-old(root){animation:backdrop-in .12s ease reverse}::view-transition-new(root){animation:backdrop-in .18s ease}
 @media(max-width:480px){header{padding:0 12px;gap:4px}.header-context{gap:8px}.header-context .brand{font-size:14px;gap:6px}.header-context .brand-mark{width:24px;height:24px;font-size:17px}.header-context .document-bar{max-width:210px;flex-basis:210px}.document-bar select{font-size:12px;padding-left:7px;padding-right:18px}#logout{padding:8px 4px;font-size:12px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}::view-transition-old(root),::view-transition-new(root){animation:none!important}@view-transition{navigation:none}}
+
+.axis-fields{border:0;padding:0;margin:0;min-width:0}.distribution-options{margin:20px 0 0}.distribution-options .checkbox{margin:8px 0 0}

@@ -7,7 +7,7 @@ from .merge_layout import parse_layout
 from .core import now
 from urllib.parse import quote
 import aiohttp
-from .core import doc_id, letters
+from .core import doc_id, letters, is_row, source_axes
 
 
 class TencentError(Exception):
@@ -99,6 +99,33 @@ class TencentClient:
                 cells[index] = values[0] if values else None
         return cells
 
+    async def read_row(self, fid, sheet, row, start, end, headers):
+        cells = {}
+        # V3 permits at most 200 columns per range request.
+        for first in range(start, end + 1, 200):
+            last = min(first + 199, end)
+            area = f'{letters(first)}{row}:{letters(last)}{row}'
+            path = '/openapi/spreadsheet/v3/files/' + '/'.join(quote(x,safe='') for x in (fid,sheet,area))
+            data = await self.request(path,None,headers)
+            grid = data.get('gridData')
+            if not isinstance(grid,dict) or not isinstance(grid.get('rows',[]),list):
+                raise TencentError('单元格数据格式异常，未生成检查结果')
+            sr, sc = grid.get('startRow',row-1), grid.get('startColumn',first-1)
+            if type(sr) is not int or type(sc) is not int or sr != row-1 or not first-1 <= sc < last:
+                raise TencentError('单元格范围偏移异常，未生成检查结果')
+            rows = grid.get('rows',[])
+            if len(rows)>1:
+                raise TencentError('返回行超出请求范围')
+            if rows:
+                if not isinstance(rows[0],dict) or not isinstance(rows[0].get('values',[]),list):
+                    raise TencentError('单元格行格式异常，未生成检查结果')
+                for offset,value in enumerate(rows[0].get('values',[])):
+                    index = sc+offset+1
+                    if not first <= index <= last:
+                        raise TencentError('返回列超出请求范围')
+                    cells[index] = value
+        return cells
+
     async def roster(self, source):
         async with self.lock:
             headers = await self.headers()
@@ -107,9 +134,11 @@ class TencentClient:
             meta = sheets.get(source['sheet_id'])
             if not meta:
                 raise TencentError('名单工作表不存在，请重新选择')
-            cells = await self.read_column(fid, source['sheet_id'], source['column'], source['start_row'], source['end_row'], headers)
+            axis, start, end = source_axes(source)
+            reader = self.read_row if is_row(source) else self.read_column
+            cells = await reader(fid,source['sheet_id'],axis,start,end,headers)
             from .core import written_text
-            names = [written_text(cells.get(r)) for r in range(source['start_row'],source['end_row']+1)]
+            names = [written_text(cells.get(r)) for r in range(start,end+1)]
             return names, source | {'sheet_name':meta['title']}
 
     async def layout(self, fid, headers, metadata, force=False):
