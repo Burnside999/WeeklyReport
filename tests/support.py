@@ -1,6 +1,6 @@
 """Legacy single-document fixtures for existing endpoint regressions."""
 from pathlib import Path
-from aiohttp.test_utils import TestClient as BaseTestClient
+from auth_support import EncryptedTestClient as BaseTestClient
 from app.core import Store
 from app.main import create_app as real_create_app
 from app.accounts import Accounts, DocumentStore

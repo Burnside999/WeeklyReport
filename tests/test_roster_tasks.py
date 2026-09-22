@@ -116,11 +116,20 @@ class LayoutTests(unittest.IsolatedAsyncioTestCase):
             client.request=request
             meta={'ID9':{'sheetId':'ID9','title':'任意名字'}}
             with patch('app.tencent.download_export',download):
-                a=await client.layout('fid',{},meta)
+                empty=await client.layout('fid',{},meta)
+                self.assertEqual(empty['sheets'],{'ID9':[]});self.assertEqual(calls,[])
+                a=await client.layout('fid',{},meta,force=True)
                 b=await client.layout('fid',{},meta)
                 self.assertEqual(a,b);self.assertEqual(len(calls),2)
                 self.assertEqual(a['sheets']['ID9'],[[999,1002,2,2]])
                 self.assertTrue(calls[0][0].endswith('/async-export'))
+                store.set('merge_layout',a | {'timestamp':0})
+                changed=meta | {'new':{'sheetId':'new','title':'新增'}}
+                cached=await client.layout('fid',{},changed)
+                self.assertEqual(cached['sheets'],{'ID9':[[999,1002,2,2]],'new':[]})
+                self.assertEqual(len(calls),2)
+                other=await client.layout('other',{},meta)
+                self.assertEqual(other['sheets'],{'ID9':[]});self.assertEqual(len(calls),2)
                 for _ in range(7):await client.layout('fid',{},meta,force=True)
                 with self.assertRaisesRegex(TencentError,'上限'):await client.layout('fid',{},meta,force=True)
             store.close()

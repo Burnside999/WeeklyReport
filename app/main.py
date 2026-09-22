@@ -17,6 +17,7 @@ from .core import (Store, doc_id, integer, now, validate_rule,
 from .variables import build_variables
 from .templates import MailEngine, TemplateConflict, check_syntax
 from .mail import DeliveryError
+from .auth import BrowserAuth
 from .accounts import Accounts, CREDENTIAL_KEYS, SMTP_KEYS, credentials, password_hash, verify_password
 from .workspaces import Workspaces, register_management, invalidate
 from .tencent import TencentClient, TencentError
@@ -151,6 +152,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     login_slots = asyncio.Semaphore(2)
     dummy_hash = password_hash(secrets.token_urlsafe(32))
     cookie_secure = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
+    browser_auth = BrowserAuth(accounts,cookie_secure)
     session_hours = integer(os.environ.get('SESSION_HOURS', '24'), 1, 168, '会话时长')
 
     @web.middleware
@@ -167,7 +169,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             authenticated = bool(user and user['version'] == session['version'])
             if authenticated:
                 request['user'], request['session'] = user, session
-            public = request.path in ('/login', '/api/login', '/healthz', '/static/style.css', '/static/login.js')
+            public = request.path in ('/login', '/api/login', '/api/logout', '/healthz', '/static/style.css', '/static/login.js', '/static/crypto.js', '/api/auth/challenge', '/api/auth/options', '/api/auth/resume', '/api/auth/forget')
             if not public and not authenticated:
                 if request.path.startswith('/api/'):
                     response = web.json_response({'error': '请先登录'}, status=401)
@@ -177,7 +179,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
                 if authenticated:
                     if request.path == '/admin' and user['role'] not in ('admin','superadmin'):
                         raise web.HTTPForbidden(text='无权访问管理界面')
-                    scoped = request.path.startswith('/api/') and request.path not in ('/api/login','/api/logout','/api/me') and not request.path.startswith(('/api/admin/','/api/documents'))
+                    scoped = request.path.startswith('/api/') and request.path not in ('/api/login','/api/logout','/api/me') and not request.path.startswith(('/api/admin/','/api/documents','/api/auth/'))
                     if scoped:
                         did = request.headers.get('X-Document-ID','')
                         if not did:
@@ -216,6 +218,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     app = web.Application(middlewares=[security], client_max_size=65536)
     app['store'], app['accounts'] = store, accounts
+    app['browser_auth'] = browser_auth
 
     async def lifecycle(app):
         async with aiohttp.ClientSession() as session:
@@ -242,7 +245,9 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         raw = await request.json()
         if not isinstance(raw, dict):
             raise ValueError('密码格式错误')
-        supplied, name = raw.get('password', ''), raw.get('username', '')
+        if 'password' in raw:
+            raise ValueError('不接受明文密码')
+        supplied, name = browser_auth.decrypt(raw.get('encrypted_password')), raw.get('username', '')
         if not isinstance(supplied, str) or len(supplied) > 1024 or not isinstance(name,str) or len(name)>64:
             raise ValueError('帐号或密码格式错误')
         if login_slots.locked():
@@ -254,6 +259,22 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         if not valid or not current_user or current_user['version'] != user['version']:
             return web.json_response({'error': '帐号或密码不正确'}, status=401)
         attempts.pop(ip, None)
+        remember, automatic = preferences(raw)
+        response = start_session(request,user)
+        if remember:
+            browser_auth.remember(request,response,user,automatic)
+        else:
+            browser_auth.forget(request,response)
+        return response
+
+    def preferences(raw):
+        remember, automatic = raw.get('remember',False), raw.get('automatic',False)
+        if not isinstance(remember,bool) or not isinstance(automatic,bool):
+            raise ValueError('登录选项格式错误')
+        return remember or automatic, automatic
+
+    def start_session(request,user):
+        current = time.time()
         for key in list(sessions):
             if sessions[key]['expires'] <= current:
                 del sessions[key]
@@ -263,14 +284,45 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         token = secrets.token_urlsafe(32)
         sessions[token] = dict(uid=user['id'],version=user['version'],expires=current + session_hours * 3600)
         response = web.json_response({'ok': True})
-        response.set_cookie('wr_session', token, httponly=True, samesite='Strict', secure=cookie_secure,
-                            max_age=session_hours * 3600, path='/')
+        response.set_cookie('wr_session', token, httponly=True, samesite='Strict', secure=cookie_secure, path='/')
+        return response
+
+    async def auth_challenge(request):
+        return web.json_response(browser_auth.challenge())
+
+    async def auth_options(request):
+        saved = browser_auth.remembered(request)
+        return web.json_response(dict(username=saved['user']['username'] if saved else '',remember=bool(saved),automatic=bool(saved and saved['automatic'])))
+
+    async def auth_forget(request):
+        response = web.json_response({'ok':True})
+        browser_auth.forget(request,response)
+        return response
+
+    async def auth_resume(request):
+        raw = await request.json()
+        if not isinstance(raw,dict) or not isinstance(raw.get('auto',False),bool):
+            raise ValueError('登录选项格式错误')
+        saved = browser_auth.remembered(request)
+        if not saved or raw.get('username') != saved['user']['username'] or (raw.get('auto') and not saved['automatic']):
+            return web.json_response({'error':'登录记忆已失效，请输入密码'},status=401)
+        remember, automatic = preferences(raw)
+        response = start_session(request,saved['user'])
+        if remember:
+            browser_auth.remember(request,response,saved['user'],automatic)
+        else:
+            browser_auth.forget(request,response)
         return response
 
     async def logout(request):
         sessions.pop(request.cookies.get('wr_session', ''), None)
         response = web.json_response({'ok': True})
         response.del_cookie('wr_session', path='/')
+        saved = browser_auth.remembered(request)
+        if saved:
+            browser_auth.remember(request,response,saved['user'],False)
+        else:
+            browser_auth.forget(request,response)
         return response
 
     async def page(request):
@@ -279,7 +331,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def static(request):
         name = request.match_info['name']
-        if name not in ('app.js', 'mail.js', 'login.js', 'workspace.js', 'admin.js', 'style.css'):
+        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'style.css'):
             raise web.HTTPNotFound()
         return web.Response(body=(ROOT / name).read_bytes(),
                             content_type='text/css' if name.endswith('.css') else 'application/javascript')
@@ -473,6 +525,8 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
         web.get('/admin', page), web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
+        web.get('/api/auth/challenge',auth_challenge), web.get('/api/auth/options',auth_options),
+        web.post('/api/auth/resume',auth_resume), web.post('/api/auth/forget',auth_forget),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check), web.put('/api/auto-query', automatic_query),
         web.post('/api/templates/validate', template_validation),
         web.get('/api/templates', templates), web.post('/api/templates', templates),

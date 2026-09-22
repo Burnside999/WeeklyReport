@@ -15,7 +15,7 @@ function documentLocation(id,path=location.pathname) {return path+(id?'?doc='+en
 function showDocuments(data) {
   documentList=data.documents;
   const select=$('#document-select');select.replaceChildren();
-  for(const d of documentList)select.append(new Option(d.name,d.id));
+  for(const d of documentList)select.append(new Option(`${d.name} · ${d.enabled_rule_count || 0}个规则`,d.id));
   select.append(new Option('＋ 新建文档管理器','__new__'));select.value=documentId;
   $('#document-bar').hidden=!documentList.length;
   for(const link of document.querySelectorAll('.bottom-nav a,.brand')) {

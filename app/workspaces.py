@@ -76,7 +76,7 @@ def register_management(app):
     async def me(request):
         user = request['user']
         creds = accounts.root.get('credentials:'+user['id'],{})
-        return web.json_response(dict(user=accounts.public(user), documents=accounts.documents(user['id']),
+        return web.json_response(dict(user=accounts.public(user), documents=[d | {'enabled_rule_count':sum(bool(r.get('enabled')) for r in DocumentStore(accounts,d).get('rules',[]))} for d in accounts.documents(user['id'])],
             credentials_configured=all(creds.get(k) for k in CREDENTIAL_KEYS), next_name=accounts.next_name(user['id'])))
 
     async def documents(request):
@@ -161,13 +161,14 @@ def register_management(app):
                 accounts.db.execute('DELETE FROM users WHERE id=?',(uid,))
                 accounts.db.execute('DELETE FROM state WHERE key IN (?,?)',('credentials:'+uid,'export_attempts:'+uid))
             return web.json_response({'ok':True})
-        if 'password' in raw and not isinstance(raw['password'],str):
-            raise ValueError('密码格式错误')
+        if 'password' in raw:
+            raise ValueError('不接受明文密码')
         # Authorize before performing costly password hashing.
         target = accounts.user(uid=uid) if uid else None
         if actor['role'] != 'superadmin' and (raw.get('role','user')!='user' or (target and target['role']!='user')):
             raise web.HTTPForbidden(text='无权修改此用户')
-        encoded = await asyncio.to_thread(password_hash,raw['password']) if raw.get('password') else None
+        supplied = app['browser_auth'].decrypt(raw['encrypted_password']) if 'encrypted_password' in raw else None
+        encoded = await asyncio.to_thread(password_hash,supplied) if supplied is not None else None
         try:
             user = accounts.save_user(actor,raw,uid,encoded)
         except PermissionError as exc:

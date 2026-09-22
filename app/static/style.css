@@ -87,3 +87,18 @@ dialog{border:1px solid var(--line);border-radius:16px;padding:24px;width:min(46
 .delete-document{width:100%;border:1px solid #eac9c5;background:#fff5f3;margin-top:16px}input[readonly]{color:var(--muted);background:#f0f3ef}
 .syntax-keyword{color:#8b3fb0;font-weight:650}.syntax-path{color:#1565c0}.syntax-literal{color:#b35f13}.syntax-delimiter{color:#718078}.pending-variable{color:#52675f}
 @media(max-width:600px){.bottom-nav{padding-left:4px;padding-right:4px;gap:0}.bottom-nav a{width:auto;flex:1;padding:6px 1px;flex-direction:column;gap:3px}.bottom-nav span{font-size:10px}.document-bar{margin-bottom:20px}}
+
+/* Compact document context stays beside the brand at every viewport. */
+.header-context{display:flex;align-items:center;gap:16px;min-width:0;flex:1}.header-context .brand{flex-shrink:0;white-space:nowrap}
+header{gap:12px}.header-context .document-bar{margin:0;min-width:0;max-width:260px;flex:0 1 260px}.document-bar select{margin:0;min-height:38px;padding:8px 26px 8px 10px;font-size:13px;text-overflow:ellipsis}#logout{flex-shrink:0;white-space:nowrap;font-size:13px}
+.login-options{display:flex;justify-content:space-between;gap:20px}.login-options .checkbox{margin-bottom:0}
+button,a,input,select,textarea{transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease,opacity .18s ease,transform .18s ease}
+button:active:not(:disabled){transform:scale(.97)}.bottom-nav a:hover,.quiet:hover{background:#e9f0e9}.panel,.rule-card{transition:border-color .2s ease,box-shadow .2s ease}.rule-card:hover{border-color:#c8d9cd;box-shadow:0 4px 16px #16382108}
+.shell>section:not([hidden]),.login-box,dialog[open],#rule-form:not([hidden]),#user-form:not([hidden]){animation:surface-in .24s ease-out both}
+dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){animation:toast-in .2s ease-out both}details[open]>*:not(summary){animation:surface-in .2s ease-out}
+@keyframes surface-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+@view-transition{navigation:auto}::view-transition-old(root){animation:backdrop-in .12s ease reverse}::view-transition-new(root){animation:backdrop-in .18s ease}
+@media(max-width:480px){header{padding:0 12px;gap:4px}.header-context{gap:8px}.header-context .brand{font-size:14px;gap:6px}.header-context .brand-mark{width:24px;height:24px;font-size:17px}.header-context .document-bar{max-width:210px;flex-basis:210px}.document-bar select{font-size:12px;padding-left:7px;padding-right:18px}#logout{padding:8px 4px;font-size:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}::view-transition-old(root),::view-transition-new(root){animation:none!important}@view-transition{navigation:none}}
