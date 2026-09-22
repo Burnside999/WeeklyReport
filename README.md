@@ -13,13 +13,13 @@ nano .env
 docker compose up -d --build
 ```
 
-访问 `http://服务器IP:8080`，使用帐号 `admin` 和 `.env` 中的初始密码登录。数据库、规则、腾讯 API 凭据和上次查询结果持久化在 Docker 命名卷 `weeklyreport-data`。无需 Node、数据库服务或额外定时任务。
+为服务器配置 HTTPS 反向代理后访问站点（本机测试可访问 `http://localhost:8080`），使用帐号 `admin` 和 `.env` 中的初始密码登录。数据库、规则、腾讯 API 凭据和上次查询结果持久化在 Docker 命名卷 `weeklyreport-data`。无需 Node、数据库服务或额外定时任务。
 
 新帐号首次登录为空，点击“新建文档管理器”，填写名称、腾讯表格 URL 和 Client ID、Open ID、Access Token。创建前验证官方表格元数据；名称在同一帐号内不能重复。文档地址创建后不可修改，可在设置中改名或删除。
 
 升级会将原有规则、模板、名单及统计迁移到 `admin` 的“文档1”，SMTP 迁移为全站配置。各文档数据与后台任务独立；三个腾讯凭据由同一帐号的所有文档继承，修改会共同生效。
 
-公网部署请通过 Nginx/Caddy 提供 HTTPS，再设置 `COOKIE_SECURE=true`；仅通过 HTTPS 访问。若反向代理在宿主机，可设置 `BIND_ADDRESS=127.0.0.1`。直接 HTTP 访问时保持 `COOKIE_SECURE=false`，否则浏览器不会发送登录 Cookie。
+公网部署请通过 Nginx/Caddy 提供 HTTPS，再设置 `COOKIE_SECURE=true`；仅通过 HTTPS 访问。若反向代理在宿主机，可设置 `BIND_ADDRESS=127.0.0.1`。仅本机 localhost HTTP 测试时使用 `COOKIE_SECURE=false`；普通服务器 IP 的 HTTP 页面无法使用密码加密功能。
 
 `admin` 初始为超级管理员。管理页可管理帐号、密码和权限；管理员可管理普通用户及 SMTP，普通用户无管理页。只有超级管理员能调整管理员和超级管理员权限，必须保留至少一个超级管理员。修改帐号、密码或权限会撤销该用户已有会话（当前帐号自行修改时保留当前会话）。`ADMIN_PASSWORD` 仅用于首次初始化，之后在管理页修改密码。
 
@@ -35,7 +35,7 @@ docker compose up -d --build
 4. 登录本应用，打开 **设置 → 高级设置**，填写 Client ID、Open ID、Access Token 并保存。
 5. 本应用仅使用 Access Token，过期后手动更新；不再配置 Refresh Token 或 Client Secret。
 6. 在“设置 → 选择数据源”（默认折叠）中读取工作表列表，选择名单所在 Sheet、姓名列与起止行，保存读取。默认全选，可取消勾选休假同事后保存统计范围。
-7. 添加监听规则，选择实际 Sheet、责任人列、一个或多个待填列及起止行。首次检查会导出一次合并结构；填写内容仍走 V3 实时读取。
+7. 添加监听规则，选择实际 Sheet、责任人列、一个或多个待填列及起止行。若表格存在合并单元格，请在设置中手动刷新合并结构；查询不会自动导出，填写内容仍走 V3 实时读取。
 
 Access Token 和 SMTP 授权码明文保存在权限为 0600 的 SQLite 数据库中。登录后个人设置接口返回自己的腾讯凭据；SMTP 仅管理员可读取。相应接口返回实际值，普通 `password` 输入框保存或刷新后保留内容（视觉上仍为圆点）；清空输入框再保存即删除，不提交的字段保持原值。升级移除旧 Refresh Token、Client Secret、过期时间与手动 File ID 配置。
 
