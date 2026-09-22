@@ -74,7 +74,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     for(const width of [320,390,600,1280]) {
       await page.setViewportSize({width,height:844});
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`mail form overflow at ${width}`);
-      assert(await page.locator('.trigger-mode input').evaluateAll(inputs=>inputs.every(e=>{
+      assert(await page.locator('#template-form .trigger-mode input').evaluateAll(inputs=>inputs.every(e=>{
         const r=e.getBoundingClientRect();return r.width===18 && r.height===18;
       })),`radio geometry at ${width}`);
     }
