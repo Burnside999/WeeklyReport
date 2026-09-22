@@ -62,7 +62,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await alice.locator('#settings details.advanced summary').click();await alice.locator('#settings [name=access_token]').fill('updated-token');
     await alice.getByRole('button',{name:'保存高级设置',exact:true}).click();await alice.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
     await otherTab.goto(base+'/settings?doc='+first);await otherTab.locator('#settings details.advanced summary').click();
-    await otherTab.waitForFunction(()=>document.querySelector('#settings [name=access_token]').value==='updated-token');
+    const tokenInput=otherTab.locator('#settings [name=access_token]');
+    for(let i=0;i<100 && await tokenInput.inputValue()!=='updated-token';i++)await new Promise(resolve=>setTimeout(resolve,50));
+    assert.equal(await tokenInput.inputValue(),'updated-token');
     // Document-local templates are empty despite admin having its own data.
     await alice.locator('#nav-mail').click();await alice.getByText('还没有邮件模板',{exact:true}).waitFor();
     // Duplicate name creation fails and leaves the selected manager intact.
