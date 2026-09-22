@@ -69,7 +69,11 @@ function edit(rule) {
 }
 $('#add-rule').onclick=()=>edit(); $('#cancel-rule').onclick=()=>form.hidden=true;
 async function renderRules() {
-  allRules=await api('rules'); $('#rules-list').replaceChildren();
+  allRules=await api('rules');
+  const current=documentList.find(d=>d.id===documentId);
+  if(current)current.enabled_rule_count=allRules.filter(r=>r.enabled).length;
+  showDocuments({documents:documentList});
+  $('#rules-list').replaceChildren();
   if(!allRules.length) {const box=el('div',undefined,'empty panel');box.append(el('h3','从第一条规则开始'),el('p','选择工作表、责任人列和需要填写的列。'));$('#rules-list').append(box);}
   for(const r of allRules) {
     const card=el('article',undefined,'rule-card'), top=el('div',undefined,'rule-top');

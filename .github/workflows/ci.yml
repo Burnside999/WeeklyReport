@@ -13,13 +13,14 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
-      - run: node --check app/static/app.js && node --check app/static/login.js && node --check app/static/mail.js && node --check app/static/workspace.js && node --check app/static/admin.js
+      - run: node --check app/static/app.js && node --check app/static/login.js && node --check app/static/mail.js && node --check app/static/workspace.js && node --check app/static/admin.js && node --check app/static/crypto.js
       - name: Mobile mail template browser test (mock SMTP)
         run: |
           npm install --prefix /tmp/weeklyreport-browser playwright@1.51.1
           /tmp/weeklyreport-browser/node_modules/.bin/playwright install --with-deps chromium
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_mail.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_accounts.cjs
+          PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_login.cjs
       - run: docker compose config --quiet
         env:
           ADMIN_PASSWORD: ci-only-password-not-for-production

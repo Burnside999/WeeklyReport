@@ -117,14 +117,14 @@ class TencentClient:
         signature = sorted((m['sheetId'],m['title']) for m in metadata.values())
         signature = [list(x) for x in signature]
         cached = self.store.get('merge_layout', {})
-        if not force and cached.get('file_id') == fid and cached.get('signature') == signature and stamp-cached.get('timestamp',0)<21600:
-            return cached
+        if not force:
+            # Geometry is refreshed exclusively through the explicit refresh endpoint.
+            saved = cached.get('sheets', {}) if cached.get('file_id') == fid else {}
+            return cached | {'sheets': {sid:saved.get(sid,[]) for sid in metadata}}
         # Tencent allows only 9 export operations/user/day. Reserve one for other clients.
         attempts = [x for x in self.store.get('export_attempts',[]) if x > stamp-86400]
         if len(attempts)>=8:
             raise TencentError('合并结构导出额度已达本应用 24 小时上限（8 次），请稍后重试')
-        if not force and attempts and stamp-attempts[-1]<3600:
-            raise TencentError('合并结构上次同步失败，自动重试间隔为 1 小时；请检查导出权限或手动刷新')
         self.store.set('export_attempts',attempts+[stamp])
         base = '/openapi/drive/v2/files/'+quote(fid,safe='')
         data = await self.request(base+'/async-export', headers=headers | {'Content-Type':'application/x-www-form-urlencoded'}, method='POST')

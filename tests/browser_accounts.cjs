@@ -37,6 +37,11 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await alice.locator('#rule-form [name=name]').fill('Alice rule');await alice.locator('#rule-form [name=sheet_id]').fill('tab1');
     await alice.locator('#rule-form button[type=submit]').click();await alice.locator('#rule-form').waitFor({state:'hidden'});
     assert.equal(await alice.locator('#rules-list article').count(),1);
+    assert.equal(await alice.locator('#document-select option:checked').textContent(),'文档1 · 1个规则');
+    await alice.locator('#rules-list input[type=checkbox]').uncheck();
+    await alice.locator('#document-select option:checked').filter({hasText:'文档1 · 0个规则'}).waitFor({state:'attached'});
+    await alice.locator('#rules-list input[type=checkbox]').check();
+    await alice.locator('#document-select option:checked').filter({hasText:'文档1 · 1个规则'}).waitFor({state:'attached'});
     // New-document option is the final option; credentials are inherited.
     await alice.locator('#document-select').selectOption('__new__');await alice.locator('#document-dialog').waitFor();
     assert.equal(await alice.locator('#document-form [name=name]').inputValue(),'文档2');
@@ -52,7 +57,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     assert(await alice.locator('#settings [name=document_url]').evaluate(e=>e.readOnly));
     assert.equal(await alice.locator('#settings [name=smtp_password]').count(),0);
     await alice.locator('#settings [name=document_name]').fill('个人文档');await alice.getByRole('button',{name:'保存设置',exact:true}).click();
-    await alice.locator('#toast').filter({hasText:'设置已保存'}).waitFor();assert.equal(await alice.locator('#document-select option:checked').textContent(),'个人文档');
+    await alice.locator('#toast').filter({hasText:'设置已保存'}).waitFor();assert.equal(await alice.locator('#document-select option:checked').textContent(),'个人文档 · 0个规则');
     await alice.locator('#settings details.advanced summary').click();await alice.locator('#settings [name=access_token]').fill('updated-token');
     await alice.getByRole('button',{name:'保存高级设置',exact:true}).click();await alice.locator('#toast').filter({hasText:'设置已保存'}).waitFor();
     await otherTab.goto(base+'/settings?doc='+first);await otherTab.locator('#settings details.advanced summary').click();

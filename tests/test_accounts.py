@@ -2,7 +2,8 @@ import asyncio
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestServer
+from auth_support import EncryptedTestClient as TestClient
 
 from app.accounts import Accounts, DocumentStore, verify_password
 from app.core import Store
