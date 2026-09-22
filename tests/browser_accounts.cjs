@@ -39,9 +39,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     assert.equal(await alice.locator('#rules-list article').count(),1);
     assert.equal(await alice.locator('#document-select option:checked').textContent(),'文档1 · 1个规则');
     await alice.locator('#rules-list input[type=checkbox]').uncheck();
-    await alice.waitForFunction(()=>document.querySelector('#document-select option:checked').textContent==='文档1 · 0个规则');
+    await alice.locator('#document-select option:checked').filter({hasText:'文档1 · 0个规则'}).waitFor({state:'attached'});
     await alice.locator('#rules-list input[type=checkbox]').check();
-    await alice.waitForFunction(()=>document.querySelector('#document-select option:checked').textContent==='文档1 · 1个规则');
+    await alice.locator('#document-select option:checked').filter({hasText:'文档1 · 1个规则'}).waitFor({state:'attached'});
     // New-document option is the final option; credentials are inherited.
     await alice.locator('#document-select').selectOption('__new__');await alice.locator('#document-dialog').waitFor();
     assert.equal(await alice.locator('#document-form [name=name]').inputValue(),'文档2');
