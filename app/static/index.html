@@ -10,9 +10,7 @@
 <div class="summary"><div class="countline"><strong id="people">—</strong><span>人未填写</span></div><p id="record-count">配置监听规则后开始检查</p><div class="summary-bottom"><div><span class="caption">上次查询</span><time id="last-time">尚未查询</time></div><button id="check" class="primary">立即查询 <span aria-hidden="true">↻</span></button></div></div>
 <label class="auto-query-toggle">开启自动查询<input id="auto-query" type="checkbox" role="switch" disabled></label>
 <p id="schedule" class="muted smalltext"></p><div id="errors" class="notice" role="status" hidden></div>
-<details id="device-notifications" class="panel push-panel"><summary>设备通知</summary>
-<p id="push-state" class="help" role="status">正在读取通知设置…</p><p id="push-primary" class="help"></p>
-<div class="push-actions"><button id="push-enable" class="secondary" disabled>开启通知</button><button id="push-test" class="secondary" hidden>发送测试通知</button><button id="push-disable" class="quiet" hidden>关闭本设备通知</button></div><p id="push-delivery" class="help" role="status"></p></details>
+<div id="device-notifications" class="panel push-panel"><label class="auto-query-toggle">允许通知<input id="push-toggle" type="checkbox" role="switch" disabled></label><p id="push-state" class="help" role="status">正在读取通知设置…</p></div>
 <div class="section-heading"><h2>未填明细</h2><span id="detail-count" class="muted"></span></div>
 <div class="table-wrap"><table><thead><tr><th scope="col">责任人</th><th scope="col">未填条目</th><th scope="col">工作表</th></tr></thead><tbody id="records"></tbody></table><div id="empty" class="empty"><span class="empty-icon">—</span><h3>还没有检查结果</h3><p>请添加监听规则</p><a href="/manage">配置监听规则 →</a></div></div>
 </section>

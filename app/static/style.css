@@ -112,5 +112,5 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 .push-panel summary {cursor:pointer}
 .push-actions {display:flex;flex-wrap:wrap;gap:8px}
 .push-panel p {overflow-wrap:anywhere}
-.primary-push-badge {display:inline-block;margin-bottom:8px}
+.trigger-badges{display:flex;gap:6px;flex-shrink:0}.badge.primary-push-badge{background:#ffe0a3;color:#863b00;border:1px solid #edb54b;font-weight:750}.rule-top h3{min-width:0}.push-panel .auto-query-toggle{margin:0;justify-content:space-between}.push-panel .help{margin-bottom:0}
 .rule-actions>div {display:flex;flex-wrap:wrap;gap:4px}

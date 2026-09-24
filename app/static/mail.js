@@ -154,8 +154,10 @@
         warning.title=errorText(syntaxErrors);warning.setAttribute('role','status');card.append(warning);
       }
       const isPrimary=primary?.document_id===documentId && primary?.trigger_id===item.id;
-      if(isPrimary)card.append(el('span','主推送','badge primary-push-badge'));
-      heading.append(el('h3',item.subject),el('span',item.mode==='auto'?'自动触发':'手动触发','badge'));card.append(heading);
+      const badges=el('div','','trigger-badges');
+      if(isPrimary)badges.append(el('span','主推送','badge primary-push-badge'));
+      badges.append(el('span',item.mode==='auto'?'自动触发':'手动触发','badge'));
+      heading.append(el('h3',item.subject),badges);card.append(heading);
       card.append(el('p',item.recipients.join('、'),'rule-meta'),el('p','上次触发：'+mailTime(item.last_trigger),'help'));
       if(item.last_success)card.append(el('p','上次发送成功：'+mailTime(item.last_success),'help'));
       if(item.mode==='auto')card.append(el('p',`${item.schedule.kind==='weekly'?'每逢 '+item.schedule.weekdays.map(d=>weekdayNames[d]).join('、')+' '+item.schedule.clock+'（仅当天）':item.schedule.kind==='fixed'?item.schedule.value+' 后':'旧时间配置，请重新编辑'} · ${item.condition.variable} ${{gt:'>',lt:'<',eq:'='}[item.condition.operator]} ${item.condition.value}`,'rule-meta'));
@@ -169,7 +171,7 @@
         if(actionBusy)return;
         if(!isPrimary && primary && !confirm(`将主推送从“${primary.document_name} · ${primary.title}”切换到这条模板？`))return;
         actionBusy=true;renderList();
-        try {const result=await api('me/primary-trigger','PUT',isPrimary?{document_id:null,trigger_id:null}:{document_id:documentId,trigger_id:item.id});primary=result.primary;toast(isPrimary?'已取消主推送':'已设为主推送');}
+        try {const result=await api('me/primary-trigger','PUT',isPrimary?{document_id:documentId,trigger_id:null}:{document_id:documentId,trigger_id:item.id});primary=result.primary;toast(isPrimary?'已取消主推送':'已设为主推送');}
         catch(error){toast(error.message);}finally{actionBusy=false;await load();renderList();}
       };
       tools.append(editButton,remove,choose);

@@ -73,4 +73,4 @@ const workspaceReady=(async()=>{
   };
   return {document:documentList.find(d=>d.id===documentId),user:account};
 })().catch(error=>{$('#workspace-error').hidden=false;$('#workspace-error').textContent=error.message;return null;});
-$('#logout').onclick=async()=>{try{await api('logout','POST',{});location.replace('/login');}catch(error){toast(error.message);}};
+$('#logout').onclick=async()=>{try{await api('logout','POST',{});window.stopDeviceNotifications?.();location.replace('/login');}catch(error){toast(error.message);}};

@@ -1,4 +1,4 @@
-"""Account-scoped primary notifications and durable, direct Apple Web Push outbox.
+"""Document-scoped primary notifications and durable, direct Apple Web Push outbox.
 
 Single process, like the existing mail scheduler. No SMTP retries are introduced.
 Only Apple's subscription hosts are accepted: this is not a general URL fetcher.
@@ -94,8 +94,8 @@ class Notifications:
                                                             serialization.PublicFormat.UncompressedPoint))
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS primary_notifications (
-                user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                document_id TEXT NOT NULL PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
                 trigger_id TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS push_subscriptions (
                 id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -117,6 +117,17 @@ class Notifications:
             CREATE INDEX IF NOT EXISTS notification_user_cursor ON notifications(user_id,id);
             CREATE INDEX IF NOT EXISTS push_due ON push_deliveries(state,next_attempt);
         ''')
+        # Upgrade the original account-wide selection without losing its value.
+        if any(r[1] == 'user_id' and r[5] for r in self.db.execute('PRAGMA table_info(primary_notifications)')):
+            with self.db:
+                self.db.execute('BEGIN IMMEDIATE')
+                self.db.execute('ALTER TABLE primary_notifications RENAME TO primary_notifications_old')
+                self.db.execute('CREATE TABLE primary_notifications ('
+                    'user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,'
+                    'document_id TEXT NOT NULL PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,'
+                    'trigger_id TEXT NOT NULL)')
+                self.db.execute('INSERT INTO primary_notifications SELECT * FROM primary_notifications_old')
+                self.db.execute('DROP TABLE primary_notifications_old')
         # A process may have stopped after sending but before saving acceptance.
         # Retried payloads keep the same notification id/tag (at-least-once).
         with self.db:
@@ -125,8 +136,8 @@ class Notifications:
         self.lock = asyncio.Lock()
         self.sender = self.send
 
-    def primary(self, uid):
-        row = self.db.execute('SELECT document_id,trigger_id FROM primary_notifications WHERE user_id=?', (uid,)).fetchone()
+    def primary(self, uid, did):
+        row = self.db.execute('SELECT document_id,trigger_id FROM primary_notifications WHERE user_id=? AND document_id=?', (uid,did)).fetchone()
         if not row:
             return None
         document = self.accounts.document(row[0], uid)
@@ -135,7 +146,7 @@ class Notifications:
                      if x['id'] == row[1]), None) if document else None
         if not item:
             with self.db:
-                self.db.execute('DELETE FROM primary_notifications WHERE user_id=?', (uid,))
+                self.db.execute('DELETE FROM primary_notifications WHERE user_id=? AND document_id=?', (uid,did))
             return None
         return dict(document_id=row[0], trigger_id=row[1], document_name=document['name'], title=item['subject'])
 
@@ -143,20 +154,20 @@ class Notifications:
         if not isinstance(raw, dict):
             raise ValueError('主推送格式错误')
         did, tid = raw.get('document_id'), raw.get('trigger_id')
-        if did is None and tid is None:
-            with self.db:
-                self.db.execute('DELETE FROM primary_notifications WHERE user_id=?', (uid,))
-            return None
         document = self.accounts.document(did, uid)
         if not document:
             raise web.HTTPNotFound(text='文档管理器不存在')
+        if tid is None:
+            with self.db:
+                self.db.execute('DELETE FROM primary_notifications WHERE user_id=? AND document_id=?', (uid,did))
+            return None
         from .accounts import DocumentStore
         if not any(x['id'] == tid for x in DocumentStore(self.accounts, document).get('mail_templates', [])):
             raise web.HTTPNotFound(text='邮件模板不存在')
         with self.db:
-            self.db.execute('INSERT INTO primary_notifications VALUES (?,?,?) ON CONFLICT(user_id) '
+            self.db.execute('INSERT INTO primary_notifications VALUES (?,?,?) ON CONFLICT(document_id) '
                             'DO UPDATE SET document_id=excluded.document_id,trigger_id=excluded.trigger_id', (uid,did,tid))
-        return self.primary(uid)
+        return self.primary(uid,did)
 
     def clear_trigger(self, did, tid):
         with self.db:
@@ -294,7 +305,7 @@ def register_notifications(app):
     service = app['notifications']
     async def primary(request):
         uid = request['user']['id']
-        value = service.choose(uid,await request.json()) if request.method == 'PUT' else service.primary(uid)
+        value = service.choose(uid,await request.json()) if request.method == 'PUT' else service.primary(uid,request.query.get('document_id') or request.headers.get('X-Document-ID'))
         return web.json_response({'primary':value})
 
     async def config(request):
@@ -304,8 +315,8 @@ def register_notifications(app):
         sid = row[0] if row else None
         delivery = service.db.execute('SELECT d.state,d.error FROM push_deliveries d '
             'WHERE d.subscription_id=? ORDER BY d.notification_id DESC LIMIT 1', (sid,)).fetchone() if sid else None
-        response = web.json_response(dict(enabled=service.enabled,public_key=service.public_key,subscription_id=sid,
-            primary=service.primary(uid),delivery=dict(state=delivery[0],error=delivery[1]) if delivery else None,
+        response = web.json_response(dict(user_id=uid,enabled=service.enabled,public_key=service.public_key,subscription_id=sid,
+            primary=service.primary(uid,request.headers.get('X-Document-ID')),delivery=dict(state=delivery[0],error=delivery[1]) if delivery else None,
             supported_provider='apple'))
         if not device_hash(request):
             response.set_cookie(DEVICE_COOKIE,secrets.token_urlsafe(32),max_age=365*86400,httponly=True,
@@ -328,6 +339,7 @@ def register_notifications(app):
         if (not existing or existing[1] != uid) and service.db.execute('SELECT count(*) FROM push_subscriptions WHERE user_id=?', (uid,)).fetchone()[0] >= 10:
             raise ValueError('每个帐号最多开启 10 台设备')
         encoded = json.dumps(raw)
+        changed = not existing or existing[1] != uid or existing[2] != encoded or existing[3] != request['user']['version']
         with service.db:
             if existing and (existing[1] != uid or existing[2] != encoded or existing[3] != request['user']['version']):
                 service.db.execute('DELETE FROM push_subscriptions WHERE id=?', (sid,))
@@ -335,6 +347,8 @@ def register_notifications(app):
                 '(id,user_id,user_version,device_hash,endpoint,payload,updated_at) VALUES (?,?,?,?,?,?,?) '
                 'ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at',
                 (sid,uid,request['user']['version'],hashed,raw['endpoint'],encoded,time.time()))
+            if changed:
+                service._enqueue(uid,None,None,secrets.token_hex(16),'消息推送启动成功！',sid=sid,test=True)
         return web.json_response({'id':sid})
 
     async def unsubscribe(request):
@@ -343,32 +357,21 @@ def register_notifications(app):
                                (request.match_info['id'],request['user']['id']))
         return web.json_response({'ok':True})
 
-    async def test(request):
-        if not service.enabled:
-            raise web.HTTPConflict(text='服务器尚未开启设备推送')
-        uid = request['user']['id']
-        row = service.db.execute('SELECT id,last_test FROM push_subscriptions '
-            'WHERE user_id=? AND user_version=? AND device_hash=?', (uid,request['user']['version'],device_hash(request))).fetchone()
-        if not row:
-            raise web.HTTPConflict(text='请先在本设备开启通知')
-        if time.time()-row[1] < 60:
-            raise web.HTTPTooManyRequests(text='请间隔 60 秒后再发送测试通知')
-        with service.db:
-            service.db.execute('UPDATE push_subscriptions SET last_test=? WHERE id=?', (time.time(),row[0]))
-            nid = service._enqueue(uid,None,None,secrets.token_hex(16),'设备通知已连接，可以接收主推送提醒。',sid=row[0],test=True)
-        return web.json_response({'ok':True,'notification_id':nid},status=202)
-
     async def listing(request):
         after = request.query.get('after', '0')
+        if after == 'latest':
+            cursor = service.db.execute('SELECT COALESCE(MAX(id),0) FROM notifications WHERE user_id=?',
+                                        (request['user']['id'],)).fetchone()[0]
+            return web.json_response(dict(user_id=request['user']['id'],items=[],next_cursor=cursor))
         if not re.fullmatch(r'\d{1,18}',after):
             raise ValueError('通知游标格式错误')
-        rows = service.db.execute('SELECT id,document_id,trigger_id,title,created_at FROM notifications '
+        rows = service.db.execute('SELECT id,document_id,trigger_id,title,created_at,expires_at FROM notifications '
             'WHERE user_id=? AND id>? AND is_test=0 ORDER BY id LIMIT 100', (request['user']['id'],int(after))).fetchall()
-        items = [dict(id=r[0],document_id=r[1],trigger_id=r[2],title=r[3],
+        items = [dict(id=r[0],document_id=r[1],trigger_id=r[2],title=r[3],expires_at=r[5],
                       created_at=datetime.fromtimestamp(r[4],timezone.utc).isoformat()) for r in rows]
-        return web.json_response(dict(items=items,next_cursor=rows[-1][0] if rows else int(after)))
+        return web.json_response(dict(user_id=request['user']['id'],items=items,next_cursor=rows[-1][0] if rows else int(after)))
 
     app.add_routes([web.get('/api/me/primary-trigger',primary),web.put('/api/me/primary-trigger',primary),
         web.get('/api/push/config',config),web.post('/api/push/subscriptions',subscribe),
-        web.delete('/api/push/subscriptions/{id}',unsubscribe),web.post('/api/push/test',test),
+        web.delete('/api/push/subscriptions/{id}',unsubscribe),
         web.get('/api/notifications',listing)])

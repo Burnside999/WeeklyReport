@@ -49,10 +49,12 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.client.close();self.env.stop();self.tmp.cleanup()
 
-    async def register(self, info=None):
+    async def register(self, info=None, keep_welcome=False):
         response=await self.client.get('/api/push/config');self.assertEqual(response.status,200)
         response=await self.client.post('/api/push/subscriptions',json=info or sub(),headers=HEADERS)
         self.assertEqual(response.status,200,await response.text())
+        if not keep_welcome:
+            self.db.execute('DELETE FROM notifications WHERE is_test=1');self.db.commit()
         return (await response.json())['id']
 
     def choose(self,item,did=None,uid=None):
@@ -66,12 +68,13 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
         doc=self.app['accounts'].add_document(self.uid,'另一文档','https://docs.qq.com/sheet/Other',{})
         runtime=self.app['workspaces'].add(doc)
         b=runtime.mailer.save(template('另一标题'));self.choose(b,doc['id'])
-        self.assertEqual(self.db.execute('SELECT count(*) FROM primary_notifications').fetchone()[0],1)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM primary_notifications').fetchone()[0],2)
         await self.fire(a)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM notifications').fetchone()[0],0)
-        runtime.mailer.delete(b['id'],b['revision']);self.assertIsNone(self.service.primary(self.uid))
-        self.choose(a);self.service.choose(self.uid,{'document_id':None,'trigger_id':None})
-        self.assertIsNone(self.service.primary(self.uid))
+        self.assertEqual(self.db.execute('SELECT count(*) FROM notifications').fetchone()[0],1)
+        runtime.mailer.delete(b['id'],b['revision']);self.assertIsNone(self.service.primary(self.uid,doc['id']))
+        self.assertEqual(self.service.primary(self.uid,self.did)['trigger_id'],a['id'])
+        self.choose(a);self.service.choose(self.uid,{'document_id':self.did,'trigger_id':None})
+        self.assertIsNone(self.service.primary(self.uid,self.did))
 
     async def test_mail_preserved_rendered_title_and_one_notification_per_attempt(self):
         await self.register()
@@ -147,10 +150,13 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('vapid',args.kwargs['headers']['Authorization'].lower())
             self.assertIsInstance(args.kwargs['data'],bytes)
 
-    async def test_test_rate_limit_logout_and_expired_session_unbind(self):
-        await self.register()
-        response=await self.client.post('/api/push/test',json={},headers=HEADERS);self.assertEqual(response.status,202)
-        response=await self.client.post('/api/push/test',json={},headers=HEADERS);self.assertEqual(response.status,429)
+    async def test_enable_welcome_once_logout_and_expired_session_unbind(self):
+        info=sub()
+        await self.register(info,keep_welcome=True)
+        await self.register(info,keep_welcome=True)
+        self.assertEqual(self.db.execute('SELECT title FROM notifications').fetchall(),[('消息推送启动成功！',)])
+        response=await self.client.post('/api/push/test',json={},headers=HEADERS)
+        self.assertEqual(response.status,404)
         self.engine.sender.assert_not_awaited()
         self.assertEqual((await (await self.client.get('/api/notifications')).json())['items'],[])
         # Even logout after session expiry can revoke this browser's subscription.
@@ -171,7 +177,8 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,404)
         response=await self.client.post('/api/push/subscriptions',json=info,headers=HEADERS);self.assertEqual(response.status,200)
         self.assertEqual(self.db.execute('SELECT user_id FROM push_subscriptions').fetchone()[0],other['id'])
-        await self.service.tick();self.service.sender.assert_not_called()
+        await self.service.tick();self.service.sender.assert_called_once()
+        self.assertEqual(self.service.sender.call_args.args[1]['body'],'消息推送启动成功！')
 
     async def test_invalid_subscription_and_account_version_revocation(self):
         await self.register();item=self.engine.save(template());self.choose(item);await self.fire(item)
@@ -189,7 +196,7 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
             response=await self.client.get(path);self.assertEqual(response.status,200);self.assertIn(kind,response.content_type)
             self.assertEqual(response.headers['Cache-Control'],'no-store')
         self.db.execute('DELETE FROM documents WHERE id=?',(self.did,));self.db.commit()
-        self.assertIsNone(self.service.primary(self.uid))
+        self.assertIsNone(self.service.primary(self.uid,self.did))
         self.assertEqual(self.db.execute('SELECT count(*) FROM notifications').fetchone()[0],0)
         await self.client.post('/api/logout',json={},headers=HEADERS)
         self.assertEqual((await self.client.get('/api/notifications')).status,401)
@@ -203,7 +210,7 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
         self.engine.sender.assert_awaited_once()
         self.assertEqual(self.db.execute('SELECT count(*) FROM notifications').fetchone()[0],1)
         self.assertEqual(self.db.execute('SELECT count(*) FROM push_deliveries').fetchone()[0],0)
-        response=await self.client.post('/api/push/test',json={},headers=HEADERS);self.assertEqual(response.status,409)
+        response=await self.client.post('/api/push/test',json={},headers=HEADERS);self.assertEqual(response.status,404)
 
     async def test_outbox_failure_does_not_block_email(self):
         item=self.engine.save(template());self.choose(item)
@@ -226,12 +233,12 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
             await phone.get(base+'/api/push/config')
             response=await phone.post(base+'/api/push/subscriptions',json=sub('second'),headers=HEADERS)
             second=(await response.json())['id']
-            item=self.engine.save(template());self.choose(item);await self.fire(item)
-            await self.service.tick();self.assertEqual(self.service.sender.call_count,2)
-            self.service.sender.reset_mock()
-            await phone.post(base+'/api/push/test',json={},headers=HEADERS)
             await self.service.tick();self.service.sender.assert_called_once()
             self.assertTrue(self.service.sender.call_args.args[0]['endpoint'].endswith('/second'))
+            self.assertEqual(self.service.sender.call_args.args[1]['body'],'消息推送启动成功！')
+            self.service.sender.reset_mock()
+            item=self.engine.save(template());self.choose(item);await self.fire(item)
+            await self.service.tick();self.assertEqual(self.service.sender.call_count,2)
             await self.client.delete('/api/push/subscriptions/'+first,json={},headers=HEADERS)
             self.assertEqual(self.db.execute('SELECT id FROM push_subscriptions').fetchall(),[(second,)])
 
@@ -243,7 +250,30 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
         self.client=TestClient(TestServer(self.app));await self.client.start_server()
         service=self.app['notifications'];service.sender=Mock(return_value=201)
         self.assertEqual(service.public_key,key)
-        self.assertEqual(service.primary(self.uid)['trigger_id'],item['id'])
+        self.assertEqual(service.primary(self.uid,self.did)['trigger_id'],item['id'])
         await service.tick();service.sender.assert_called_once()
         engine=self.app['workspaces'].items[self.did].mailer
         self.assertEqual(engine.get(item['id'])['status'],'sent')
+
+    async def test_migration_keeps_old_choice_and_allows_second_document(self):
+        item=self.engine.save(template());self.choose(item)
+        with self.db:
+            self.db.execute('ALTER TABLE primary_notifications RENAME TO saved_selection')
+            self.db.execute('CREATE TABLE primary_notifications (user_id TEXT PRIMARY KEY,document_id TEXT NOT NULL,trigger_id TEXT NOT NULL)')
+            self.db.execute('INSERT INTO primary_notifications SELECT * FROM saved_selection')
+            self.db.execute('DROP TABLE saved_selection')
+        migrated=Notifications(self.app['accounts'])
+        self.assertEqual(migrated.primary(self.uid,self.did)['trigger_id'],item['id'])
+        doc=self.app['accounts'].add_document(self.uid,'另一文档','https://docs.qq.com/sheet/Other',{})
+        runtime=self.app['workspaces'].add(doc)
+        other=runtime.mailer.save(template('另一标题'))
+        migrated.choose(self.uid,{'document_id':doc['id'],'trigger_id':other['id']})
+        migrated.choose(self.uid,{'document_id':doc['id'],'trigger_id':None})
+        self.assertEqual(migrated.primary(self.uid,self.did)['trigger_id'],item['id'])
+
+    async def test_latest_cursor_does_not_replay_history(self):
+        item=self.engine.save(template());self.choose(item);await self.fire(item)
+        result=await (await self.client.get('/api/notifications?after=latest')).json()
+        self.assertEqual(result['items'],[]);self.assertGreater(result['next_cursor'],0)
+        next_page=await (await self.client.get('/api/notifications?after='+str(result['next_cursor']))).json()
+        self.assertEqual(next_page['items'],[])

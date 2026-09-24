@@ -10,15 +10,30 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     for(let i=0;i<50;i++){try{if((await fetch(base+'/healthz')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}
     assert(ready);
     browser=await chromium.launch({headless:true});
-    const context=await browser.newContext({viewport:{width:390,height:844}});
+    const context=await browser.newContext({viewport:{width:390,height:844},permissions:['notifications'],bypassCSP:true});
+    await context.addInitScript(()=>{
+      window.displayedNotifications=[];
+      // OS permission and display are mocked; real delivery remains a device check.
+      Object.defineProperty(Notification,'permission',{get:()=>window.mockPermission || 'granted'});
+      ServiceWorkerRegistration.prototype.showNotification=async function(title,options){window.displayedNotifications.push({title,...options});};
+      // Poll quickly in the fixture, while preserving all other timers.
+      const interval=window.setInterval;
+      window.setInterval=(fn,ms,...args)=>interval(fn,ms===15000 ? 200 : ms,...args);
+      PushManager.prototype.subscribe=()=>{throw new Error('Chromium must not subscribe to Google push');};
+    });
     const page=await context.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(String(e)));
     await page.goto(base+'/login');await page.locator('#username').fill('admin');await page.locator('#password').fill('browser-test-password');
     await page.locator('#login button').click();await page.waitForURL(u=>u.pathname==='/');
     await page.locator('#document-select').waitFor();const did=await page.locator('#document-select').inputValue();
-    await page.locator('#device-notifications summary').click();
-    await page.locator('#push-state').filter({hasText:'本版本设备推送支持'}).waitFor();
-    assert(await page.locator('#push-enable').isDisabled(),'do not use Google push on desktop Chromium');
+    await page.waitForFunction(()=>!document.querySelector('#push-toggle').disabled);
+    await page.locator('#push-toggle').click();
+    await page.waitForFunction(()=>window.displayedNotifications.length===1);
+    assert.equal(await page.evaluate(()=>window.displayedNotifications[0].body),'消息推送启动成功！');
+    assert.equal(await page.locator('#push-test').count(),0);
+    await page.reload();
+    await page.locator('#push-state').filter({hasText:'保持页面打开'}).waitFor();
+    assert.equal(await page.evaluate(()=>window.displayedNotifications.length),0,'reload must not send welcome again');
     await page.evaluate(()=>navigator.serviceWorker.ready);
     const manifest=await (await context.request.get(base+'/manifest.webmanifest')).json();assert.equal(manifest.display,'standalone');
     const items=[];
@@ -33,20 +48,40 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('.rule-card').filter({hasText:'第二条主推送'}).getByRole('button',{name:'设为主推送',exact:true}).click();
     await page.locator('.rule-card').filter({hasText:'第二条主推送'}).locator('.primary-push-badge').waitFor();
     assert.equal(await page.locator('.primary-push-badge').count(),1);
+    assert.deepEqual(await page.locator('.primary-push-badge').evaluate(el=>[el.parentElement.children[0].textContent,el.nextElementSibling.textContent]),['主推送','手动触发']);
+    const second=await context.newPage();await second.goto(base+'/?doc='+did);
+    await second.locator('#push-state').filter({hasText:'保持页面打开'}).waitFor();
+    const trigger=await context.request.post(base+'/api/templates/'+items[1].id+'/send',{headers:{'X-Requested-With':'WeeklyReport','X-Document-ID':did},data:{revision:items[1].revision}});
+    assert(trigger.ok(),await trigger.text());
+    await page.waitForTimeout(800);
+    const count=await page.evaluate(()=>window.displayedNotifications.filter(n=>n.body==='第二条主推送').length)+await second.evaluate(()=>window.displayedNotifications.filter(n=>n.body==='第二条主推送').length);
+    assert.equal(count,1,'one notification across tabs, including the mail page');
+    await second.locator('#push-toggle').uncheck();
+    await page.waitForFunction(()=>!document.querySelector('#push-toggle').checked);
+    await second.close();
+    const updated=await (await context.request.get(base+'/api/templates',{headers:{'X-Document-ID':did}})).json();
+    const selected=updated.find(item=>item.id===items[1].id);
+    const beforeDisabled=await page.evaluate(()=>window.displayedNotifications.length);
+    const disabledTrigger=await context.request.post(base+'/api/templates/'+selected.id+'/send',{headers:{'X-Requested-With':'WeeklyReport','X-Document-ID':did},data:{revision:selected.revision,confirm_attempt:selected.attempt}});
+    assert(disabledTrigger.ok(),await disabledTrigger.text());
+    await page.waitForTimeout(400);
+    assert.equal(await page.evaluate(()=>window.displayedNotifications.length),beforeDisabled);
     await page.reload();await page.locator('.primary-push-badge').waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mail layout fits mobile');
     await page.locator('.rule-card').filter({hasText:'第二条主推送'}).getByRole('button',{name:'取消主推送',exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('.primary-push-badge').length===0);
-    await page.goto(base+'/?doc='+did);await page.locator('#device-notifications summary').click();
-    await page.locator('#push-state').filter({hasText:'本版本设备推送支持'}).waitFor();
+    await page.goto(base+'/?doc='+did);
+    await page.waitForFunction(()=>!document.querySelector('#push-toggle').disabled);
+    assert(!(await page.locator('#push-toggle').isChecked()));
     if(process.env.PWA_SCREENSHOT)await page.screenshot({path:process.env.PWA_SCREENSHOT,fullPage:true});
-    // iPhone install instructions, without mocking a successful Apple delivery.
+    // Ordinary iPhone tabs can opt into in-page reminders without pretending to have background push.
     const iphone=await browser.newContext({viewport:{width:390,height:844},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
     await iphone.addCookies(await context.cookies());const phone=await iphone.newPage();
-    await phone.goto(base+'/?doc='+did);await phone.locator('#device-notifications summary').click();
-    await phone.locator('#push-state').filter({hasText:'添加到主屏幕'}).waitFor();assert(await phone.locator('#push-enable').isDisabled());
-    if(process.env.PWA_SCREENSHOT)await phone.screenshot({path:process.env.PWA_SCREENSHOT.replace('.png','-iphone.png'),fullPage:true});
-    await iphone.close();
+    await phone.goto(base+'/?doc='+did);
+    await phone.locator('#push-state').filter({hasText:'添加到主屏幕'}).waitFor();
+    await phone.locator('#push-toggle').check();
+    await phone.locator('#toast').filter({hasText:'消息推送启动成功！'}).waitFor();
+    await phone.locator('#push-toggle').uncheck();await iphone.close();
     // Deep link survives an expired login; no open redirect.
     await page.locator('#logout').click();await page.waitForURL(u=>u.pathname==='/login');
     await page.goto(base+'/?doc='+did);await page.locator('#username').fill('admin');await page.locator('#password').fill('browser-test-password');
