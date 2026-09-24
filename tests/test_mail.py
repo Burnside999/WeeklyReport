@@ -20,7 +20,7 @@ def template(**changes):
 
 
 def auto(**changes):
-    return template(mode='auto', schedule=dict(kind='variable',value='global.week.friday',clock='09:00'),
+    return template(mode='auto', schedule=dict(kind='weekly',weekdays=[4],clock='09:00'),
                     condition=dict(variable='global.listencount',operator='eq',value='0')) | changes
 
 
@@ -55,8 +55,8 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         for value in ['global.time','global.personcount','notFound']:
             with self.assertRaises(ValueError):validate_template(auto(schedule=dict(kind='variable',value=value)),self.catalog())
         with self.assertRaises(ValueError):validate_template(auto(schedule=dict(kind='fixed',value='2026-02-30T09:00')),self.catalog())
-        rule=validate_template(auto(schedule=dict(kind='variable',value='{{global.week.friday}}',clock='09:30')),self.catalog())
-        self.assertEqual(resolve_time(rule['schedule'],self.catalog()),self.current.replace(hour=9,minute=30))
+        rule=validate_template(auto(schedule=dict(kind='weekly',weekdays=[4],clock='09:30')),self.catalog())
+        self.assertEqual(resolve_time(rule['schedule'],self.current),self.current.replace(hour=9,minute=30))
         self.assertEqual(typed_value('datetime','2026-09-18T01:00Z'),self.current.replace(hour=9,minute=0))
         self.assertFalse(typed_value('boolean','false'))
         with self.assertRaises(ValueError):typed_value('boolean','0')
@@ -70,8 +70,52 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.engine=MailEngine(self.store,self.monitor,self.sender,lambda:self.current)
         await self.engine.tick();self.assertEqual(self.sender.await_count,1)
         self.current+=timedelta(days=3);await self.engine.tick()
-        self.assertEqual(self.engine.get(item['id'])['status'],'waiting')
+        self.assertIn('今天不在',self.engine.get(item['id'])['note'])
         self.current+=timedelta(days=4);await self.engine.tick();self.assertEqual(self.sender.await_count,2)
+
+    def test_weekly_validation_and_timezone(self):
+        for days in [[], [True], [-1], [7], ['4'], None]:
+            with self.assertRaises(ValueError):
+                validate_template(auto(schedule=dict(kind='weekly',weekdays=days,clock='09:00')),self.catalog())
+        for clock in ['24:00', 'no', None]:
+            with self.assertRaises(ValueError):
+                validate_template(auto(schedule=dict(kind='weekly',weekdays=[4],clock=clock)),self.catalog())
+        rule=validate_template(auto(schedule=dict(kind='weekly',weekdays=[6,4,4],clock='09:00')),self.catalog())
+        self.assertEqual(rule['schedule']['weekdays'],[4,6])
+        from datetime import timezone
+        self.assertEqual(resolve_time(rule['schedule'],self.current.astimezone(timezone.utc)),self.current.replace(hour=9,minute=0))
+
+    async def test_multiple_days_midnight_expiry_and_no_catchup(self):
+        item=self.engine.save(auto(schedule=dict(kind='weekly',weekdays=[4,6],clock='09:00'),
+                                   condition=dict(variable='global.personcount',operator='eq',value='0')))
+        self.current=self.current.replace(hour=23,minute=59)
+        await self.engine.tick();self.sender.assert_not_awaited()
+        self.current+=timedelta(minutes=1);self.success()
+        await self.engine.tick();self.sender.assert_not_awaited()
+        self.current+=timedelta(days=1);self.current=self.current.replace(hour=8,minute=59)
+        self.success();await self.engine.tick();self.sender.assert_not_awaited()
+        self.current+=timedelta(minutes=1);self.success()
+        await self.engine.tick();await self.engine.tick();self.assertEqual(self.sender.await_count,1)
+        self.current+=timedelta(days=5);self.success()
+        await self.engine.tick();self.assertEqual(self.sender.await_count,2)
+        # A stopped service never catches up the expired Friday on Saturday.
+        self.current+=timedelta(days=8);self.success()
+        self.engine=MailEngine(self.store,self.monitor,self.sender,lambda:self.current)
+        await self.engine.tick();self.assertEqual(self.sender.await_count,2)
+
+    async def test_fixed_once_and_legacy_migration_preserves_claim(self):
+        self.current=self.current.replace(hour=10)
+        item=self.engine.save(auto())
+        await self.engine.tick()
+        legacy=self.engine.get(item['id'])
+        legacy['schedule']=dict(kind='variable',value='global.week.friday',clock='09:00')
+        self.engine.write(legacy)
+        self.engine=MailEngine(self.store,self.monitor,self.sender,lambda:self.current)
+        self.assertEqual(self.engine.get(item['id'])['schedule']['weekdays'],[4])
+        await self.engine.tick();self.assertEqual(self.sender.await_count,1)
+        self.engine.save(auto(schedule=dict(kind='fixed',value='2026-09-18T09:00')))
+        await self.engine.tick();self.assertEqual(self.sender.await_count,2)
+        self.current+=timedelta(days=1);await self.engine.tick();self.assertEqual(self.sender.await_count,2)
 
     async def test_edit_reset_noop_and_optimistic_revision(self):
         self.current=self.current.replace(hour=10)
