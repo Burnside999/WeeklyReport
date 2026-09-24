@@ -6,7 +6,7 @@ function el(tag,text,cls) {const e=document.createElement(tag);if(text!==undefin
 function toast(message) {clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
 async function api(path,method='GET',body) {
   const response=await fetch('/api/'+path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'WeeklyReport',...(documentId?{'X-Document-ID':documentId}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
-  if(response.status===401){location.replace('/login');throw new Error('请重新登录');}
+  if(response.status===401){location.replace('/login?next='+encodeURIComponent(location.pathname+location.search));throw new Error('请重新登录');}
   const text=await response.text();let data;try{data=JSON.parse(text);}catch{data={error:text};}
   if(!response.ok){const error=new Error(data.error || '请求失败');error.data=data;error.status=response.status;throw error;}
   return data;

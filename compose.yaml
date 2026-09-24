@@ -13,6 +13,8 @@ services:
       DATA_DIR: /data
       PORT: 8080
       TZ: Asia/Shanghai
+      WEB_PUSH_ENABLED: ${WEB_PUSH_ENABLED:-false}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     volumes:
       - weeklyreport-data:/data
     read_only: true

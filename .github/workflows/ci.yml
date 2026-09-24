@@ -13,7 +13,8 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
-      - run: node --check app/static/app.js && node --check app/static/login.js && node --check app/static/mail.js && node --check app/static/workspace.js && node --check app/static/admin.js && node --check app/static/crypto.js
+      - run: node --check app/static/app.js && node --check app/static/login.js && node --check app/static/mail.js && node --check app/static/workspace.js && node --check app/static/admin.js && node --check app/static/crypto.js && node --check app/static/pwa.js && node --check app/static/pwa-register.js && node --check app/static/sw.js
+      - run: node tests/test_service_worker.cjs
       - name: Mobile mail template browser test (mock SMTP)
         run: |
           npm install --prefix /tmp/weeklyreport-browser playwright@1.51.1
@@ -22,6 +23,7 @@ jobs:
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_accounts.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_login.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_distribution.cjs
+          PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_pwa.cjs
       - run: docker compose config --quiet
         env:
           ADMIN_PASSWORD: ci-only-password-not-for-production

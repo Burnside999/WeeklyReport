@@ -6,6 +6,7 @@
   const form = $('#template-form'), subject = $('#mail-subject'), body = $('#mail-body');
   let catalog = {rows: [], values: {}}, items = [], editing = null, loading = false, actionBusy = false;
   const sentThisPage = new Set();
+  let primary = null;
   const token = /{{\s*([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*)\s*}}/g;
   let validationTimer, validationVersion = 0, validTokens = {}, validatedText = {};
   const comparable = new Set(['integer','boolean']);
@@ -152,6 +153,8 @@
         const warning=el('p','❗存在语法错误','error syntax-warning');
         warning.title=errorText(syntaxErrors);warning.setAttribute('role','status');card.append(warning);
       }
+      const isPrimary=primary?.document_id===documentId && primary?.trigger_id===item.id;
+      if(isPrimary)card.append(el('span','主推送','badge primary-push-badge'));
       heading.append(el('h3',item.subject),el('span',item.mode==='auto'?'自动触发':'手动触发','badge'));card.append(heading);
       card.append(el('p',item.recipients.join('、'),'rule-meta'),el('p','上次触发：'+mailTime(item.last_trigger),'help'));
       if(item.last_success)card.append(el('p','上次发送成功：'+mailTime(item.last_success),'help'));
@@ -160,7 +163,16 @@
       else if(item.note && item.mode==='auto')card.append(el('p',item.note,'help'));
       const actions=el('div',undefined,'rule-actions'), tools=el('div'), editButton=el('button','编辑','quiet'), remove=el('button','删除','quiet danger');
       editButton.onclick=()=>edit(item);remove.onclick=async()=>{if(!confirm('删除此邮件模板？'))return;try{await api('templates/'+item.id,'DELETE',{revision:item.revision});if(editing?.id===item.id)form.hidden=true;await load();}catch(error){toast(error.message);}};
-      tools.append(editButton,remove);
+      const choose=el('button',isPrimary?'取消主推送':'设为主推送','quiet');
+      choose.disabled=actionBusy || item.status==='sending';
+      choose.onclick=async()=>{
+        if(actionBusy)return;
+        if(!isPrimary && primary && !confirm(`将主推送从“${primary.document_name} · ${primary.title}”切换到这条模板？`))return;
+        actionBusy=true;renderList();
+        try {const result=await api('me/primary-trigger','PUT',isPrimary?{document_id:null,trigger_id:null}:{document_id:documentId,trigger_id:item.id});primary=result.primary;toast(isPrimary?'已取消主推送':'已设为主推送');}
+        catch(error){toast(error.message);}finally{actionBusy=false;await load();renderList();}
+      };
+      tools.append(editButton,remove,choose);
       const completed=item.status==='sent' || item.status==='error';
       const label=item.status==='sending'?'发送中…':item.mode==='auto'?(completed?'重置自动触发':'等待自动触发'):(sentThisPage.has(item.id)?'发送成功':'发送邮件');
       const send=el('button',label,'primary');
@@ -190,7 +202,7 @@
   }
   async function load() {
     if(loading)return;loading=true;
-    try {items=await api('templates');$('#mail-load-state').textContent='';renderList();if(!form.hidden)updateEditors();}
+    try {const result=await Promise.all([api('templates'),api('me/primary-trigger')]);items=result[0];primary=result[1].primary;$('#mail-load-state').textContent='';renderList();if(!form.hidden)updateEditors();}
     catch(error){$('#mail-load-state').textContent='模板读取失败：'+error.message;toast(error.message);}
     finally{loading=false;}
   }

@@ -26,7 +26,12 @@ async function login(auto=false) {
     const body={username:username.value.trim(),remember:remember.checked,automatic:automatic.checked};
     if(!password.value && savedName===body.username && remember.checked)await request('auth/resume',{...body,auto});
     else await request('login',{...body,encrypted_password:await encryptPassword(password.value)});
-    password.value='';location.replace('/');
+    password.value='';
+    let next='/';
+    try {const target=new URL(new URLSearchParams(location.search).get('next') || '/',location.origin);
+      if(target.origin===location.origin && ['/','/mail','/manage','/settings','/variables','/admin'].includes(target.pathname))next=target.pathname+target.search;
+    } catch { /* Invalid destinations return to the home page. */ }
+    location.replace(next);
   }catch(error){document.querySelector('#error').textContent=error.message;if(auto || !password.value){savedName='';automatic.checked=false;syncPassword();}}
   finally{busy=false;button.disabled=false;}
 }

@@ -137,8 +137,9 @@ def validate_template(raw, catalog, *, check_references=True):
 
 
 class MailEngine:
-    def __init__(self, store, monitor, sender=None, clock=None):
+    def __init__(self, store, monitor, sender=None, clock=None, notifications=None):
         self.store, self.monitor = store, monitor
+        self.notifications = notifications
         self.sender = sender
         self.clock = clock or (lambda: datetime.now(LOCAL_TZ))
         self.lock = asyncio.Lock()
@@ -235,6 +236,8 @@ class MailEngine:
         if self.get(identifier)['revision'] != revision:
             raise TemplateConflict('模板已修改，请刷新后重试')
         self.store.set('mail_templates', [x for x in self.items() if x['id'] != identifier])
+        if self.notifications:
+            self.notifications.clear_trigger(self.store.id, identifier)
 
     def reset(self, identifier, revision):
         self.ensure_idle()
@@ -272,7 +275,15 @@ class MailEngine:
         if '\n' in subject or '\r' in subject or len(subject) > 998 or len(body) > 200000:
             raise ValueError('替换变量后的标题包含换行、过长，或正文超过 20 万字')
         item.update(status='sending', error='', note='', last_trigger=stamp(current), attempt=secrets.token_hex(16))
-        self.write(item)  # durable claim BEFORE the irreversible SMTP operation
+        if self.notifications:
+            try:
+                self.notifications.claim(self.store, item, subject)
+            except Exception:
+                # Notification failures must not suppress the existing email path.
+                LOG.error('Could not persist primary notification; continuing email delivery')
+                self.write(item)
+        else:
+            self.write(item)  # durable claim BEFORE the irreversible SMTP operation
         try:
             sender = self.sender or SMTPMailer(SMTPConfig.from_settings(self.store.settings())).send
             await sender(subject=subject, text=body, recipients=item['recipients'])

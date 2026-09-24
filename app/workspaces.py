@@ -18,10 +18,11 @@ def invalidate(store, message):
 
 
 class Workspaces:
-    def __init__(self, accounts, session, monitor_class, scheduled):
+    def __init__(self, accounts, session, monitor_class, scheduled, notifications=None):
         self.accounts, self.session, self.monitor_class = accounts, session, monitor_class
         self.scheduled, self.items, self.user_locks = scheduled, {}, {}
         self.mutations = asyncio.Lock()
+        self.notifications = notifications
 
     def add(self, document):
         store = DocumentStore(self.accounts,document)
@@ -30,7 +31,7 @@ class Workspaces:
         client = TencentClient(store,self.session)
         client.lock = self.user_locks.setdefault(document['owner_id'],asyncio.Lock())
         monitor = self.monitor_class(store,client)
-        mailer = MailEngine(store,monitor)
+        mailer = MailEngine(store,monitor,notifications=self.notifications)
         runtime = SimpleNamespace(store=store,client=client,monitor=monitor,mailer=mailer,tasks=[])
         self.items[document['id']] = runtime
         if self.scheduled:

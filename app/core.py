@@ -155,6 +155,7 @@ def migrate_variables(store):
 
 class Store:
     def __init__(self, path):
+        self.path = path
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         self.db = sqlite3.connect(path)
         self.db.execute('PRAGMA journal_mode=WAL')

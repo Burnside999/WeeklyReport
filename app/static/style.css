@@ -106,3 +106,11 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 .axis-fields{border:0;padding:0;margin:0;min-width:0}.distribution-options{margin:20px 0 0}.distribution-options .checkbox{margin:8px 0 0}
 
 .weekday-options{display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:12px}
+
+/* Device notifications fit the existing mobile-first cards. */
+.push-panel {margin-top:16px}
+.push-panel summary {cursor:pointer}
+.push-actions {display:flex;flex-wrap:wrap;gap:8px}
+.push-panel p {overflow-wrap:anywhere}
+.primary-push-badge {display:inline-block;margin-bottom:8px}
+.rule-actions>div {display:flex;flex-wrap:wrap;gap:4px}

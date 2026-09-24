@@ -18,6 +18,7 @@ from .variables import build_variables
 from .templates import MailEngine, TemplateConflict, check_syntax
 from .mail import DeliveryError
 from .auth import BrowserAuth
+from .notifications import Notifications, register_notifications
 from .accounts import Accounts, CREDENTIAL_KEYS, SMTP_KEYS, credentials, password_hash, verify_password
 from .workspaces import Workspaces, register_management, invalidate
 from .tencent import TencentClient, TencentError
@@ -175,17 +176,19 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             authenticated = bool(user and user['version'] == session['version'])
             if authenticated:
                 request['user'], request['session'] = user, session
-            public = request.path in ('/login', '/api/login', '/api/logout', '/healthz', '/static/style.css', '/static/login.js', '/static/crypto.js', '/api/auth/challenge', '/api/auth/options', '/api/auth/resume', '/api/auth/forget')
+            public = request.path in ('/sw.js', '/manifest.webmanifest', '/offline', '/static/icon-192.png', '/static/icon-512.png', '/static/apple-touch-icon.png', '/static/pwa-register.js', '/login', '/api/login', '/api/logout', '/healthz', '/static/style.css', '/static/login.js', '/static/crypto.js', '/api/auth/challenge', '/api/auth/options', '/api/auth/resume', '/api/auth/forget')
             if not public and not authenticated:
                 if request.path.startswith('/api/'):
                     response = web.json_response({'error': '请先登录'}, status=401)
                 else:
-                    raise web.HTTPFound('/login')
+                    from urllib.parse import quote
+                    target = str(request.rel_url) if request.path == '/' else '/'
+                    raise web.HTTPFound('/login?next=' + quote(target, safe=''))
             else:
                 if authenticated:
                     if request.path == '/admin' and user['role'] not in ('admin','superadmin'):
                         raise web.HTTPForbidden(text='无权访问管理界面')
-                    scoped = request.path.startswith('/api/') and request.path not in ('/api/login','/api/logout','/api/me') and not request.path.startswith(('/api/admin/','/api/documents','/api/auth/'))
+                    scoped = request.path.startswith('/api/') and request.path not in ('/api/login','/api/logout','/api/me') and not request.path.startswith(('/api/admin/','/api/documents','/api/auth/','/api/me/','/api/push/')) and request.path != '/api/notifications'
                     if scoped:
                         did = request.headers.get('X-Document-ID','')
                         if not did:
@@ -225,14 +228,21 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
     app = web.Application(middlewares=[security], client_max_size=65536)
     app['store'], app['accounts'] = store, accounts
     app['browser_auth'] = browser_auth
+    app['notifications'] = Notifications(accounts)
 
     async def lifecycle(app):
         async with aiohttp.ClientSession() as session:
-            hub = app['workspaces'] = Workspaces(accounts,session,Monitor,start_scheduler)
+            hub = app['workspaces'] = Workspaces(accounts,session,Monitor,start_scheduler,app['notifications'])
             for document in accounts.documents():
                 hub.add(document)
-            yield
-            await hub.close()
+            push_task = asyncio.create_task(app['notifications'].loop()) if start_scheduler else None
+            try:
+                yield
+            finally:
+                await hub.close()
+                if push_task:
+                    push_task.cancel()
+                    await asyncio.gather(push_task,return_exceptions=True)
         store.close()
     app.cleanup_ctx.append(lifecycle)
 
@@ -287,6 +297,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         if len(sessions) >= 1000:
             sessions.pop(next(iter(sessions)))
         sessions.pop(request.cookies.get('wr_session', ''), None)
+        app['notifications'].unbind_if_other_user(request,user['id'])
         token = secrets.token_urlsafe(32)
         sessions[token] = dict(uid=user['id'],version=user['version'],expires=current + session_hours * 3600)
         response = web.json_response({'ok': True})
@@ -321,6 +332,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         return response
 
     async def logout(request):
+        app['notifications'].unbind(request)
         sessions.pop(request.cookies.get('wr_session', ''), None)
         response = web.json_response({'ok': True})
         response.del_cookie('wr_session', path='/')
@@ -337,10 +349,10 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def static(request):
         name = request.match_info['name']
-        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'style.css'):
+        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'style.css', 'pwa.js', 'pwa-register.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'):
             raise web.HTTPNotFound()
         return web.Response(body=(ROOT / name).read_bytes(),
-                            content_type='text/css' if name.endswith('.css') else 'application/javascript')
+                            content_type='image/png' if name.endswith('.png') else 'text/css' if name.endswith('.css') else 'application/javascript')
 
     async def status(request):
         runtime = request['workspace']
@@ -526,10 +538,16 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
             result = engine.save(raw, identifier)
         return web.json_response(result)
 
+    async def pwa_asset(request):
+        name, content_type = {'/sw.js':('sw.js','application/javascript'),
+            '/manifest.webmanifest':('manifest.webmanifest','application/manifest+json'),
+            '/offline':('offline.html','text/html')}[request.path]
+        return web.Response(body=(ROOT/name).read_bytes(),content_type=content_type)
+
     async def health(request):
         return web.json_response({'ok': True})
 
-    app.add_routes([web.get('/healthz', health), web.get('/login', page), web.get('/', page),
+    app.add_routes([web.get('/sw.js',pwa_asset),web.get('/manifest.webmanifest',pwa_asset),web.get('/offline',pwa_asset),web.get('/healthz', health), web.get('/login', page), web.get('/', page),
         web.get('/admin', page), web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.get('/api/auth/challenge',auth_challenge), web.get('/api/auth/options',auth_options),
         web.post('/api/auth/resume',auth_resume), web.post('/api/auth/forget',auth_forget),
@@ -544,6 +562,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         web.put('/api/roster/selection',roster), web.post('/api/layout/refresh',refresh_layout),
         web.get('/api/settings', settings), web.put('/api/settings', settings), web.get('/api/sheets', sheets)])
     register_management(app)
+    register_notifications(app)
     return app
 
 
