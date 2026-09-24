@@ -10,7 +10,6 @@ from .mail import SMTPConfig, SMTPMailer, DeliveryError, recipients_list
 from .variables import LOCAL_TZ, build_variables
 from .template_language import Program, TemplateSyntaxError
 
-TOKEN = re.compile(r'{{\s*([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)\s*}}')
 OPS = {'gt': operator.gt, 'lt': operator.lt, 'eq': operator.eq}
 COMPARABLE = {'integer', 'boolean'}
 CONFIG_KEYS = ('recipients', 'subject', 'body', 'mode', 'schedule', 'condition')
@@ -84,21 +83,13 @@ def check_syntax(raw, catalog):
     return dict(syntax_errors=errors, tokens=tokens)
 
 
-def resolve_time(schedule, catalog):
+def resolve_time(schedule, current):
     if schedule['kind'] == 'fixed':
         return parse_datetime(schedule['value'])
-    name = schedule['value']
-    row = next((r for r in catalog['rows'] if r['name'] == name), None)
-    if not row or row['type'] not in ('date', 'datetime'):
-        raise ValueError('时间点只能引用日期或日期时间变量')
-    value = catalog['values'][name]
-    if value is None:
-        raise ValueError('时间点变量当前值未知')
-    if row['type'] == 'datetime':
-        return parse_datetime(value)
-    day = typed_value('date', value)
-    clock = typed_value('time', schedule['clock'])
-    return datetime.combine(day, clock, LOCAL_TZ)
+    current = current.astimezone(LOCAL_TZ)
+    if current.weekday() not in schedule['weekdays']:
+        return None
+    return datetime.combine(current.date(), typed_value('time', schedule['clock']), LOCAL_TZ)
 
 
 def validate_template(raw, catalog, *, check_references=True):
@@ -124,23 +115,17 @@ def validate_template(raw, catalog, *, check_references=True):
     condition = raw.get('condition')
     if not isinstance(schedule, dict) or not isinstance(condition, dict):
         raise ValueError('请配置时间点和触发规则')
-    kind, value = schedule.get('kind'), schedule.get('value')
-    if not isinstance(value, str):
-        raise ValueError('请填写合法时间点')
-    value = value.strip()
+    kind = schedule.get('kind')
     if kind == 'fixed':
-        result['schedule'] = dict(kind=kind, value=parse_datetime(value).isoformat(timespec='seconds'))
-    elif kind == 'variable':
-        match = TOKEN.fullmatch(value)
-        value = match.group(1) if match else value
-        row = next((r for r in catalog['rows'] if r['name'] == value), None)
-        if not row or row['type'] not in ('date', 'datetime'):
-            raise ValueError('时间点只能引用日期或日期时间变量，不能使用仅含时分秒的变量')
-        clock = schedule.get('clock', '00:00') if row['type'] == 'date' else '00:00'
-        clock = typed_value('time', clock).isoformat()
-        result['schedule'] = dict(kind=kind, value=value, clock=clock)
+        result['schedule'] = dict(kind=kind, value=parse_datetime(schedule.get('value')).isoformat(timespec='seconds'))
+    elif kind == 'weekly':
+        days = schedule.get('weekdays')
+        if not isinstance(days, list) or not days or len(days) > 7 or any(type(d) is not int or not 0 <= d <= 6 for d in days):
+            raise ValueError('请至少选择一个星期，星期须为 0（周一）至 6（周日）')
+        result['schedule'] = dict(kind=kind, weekdays=sorted(set(days)),
+                                  clock=typed_value('time', schedule.get('clock')).isoformat())
     else:
-        raise ValueError('请选择固定时间或日期变量')
+        raise ValueError('请选择固定时刻或每周几检查；旧日期变量配置请重新编辑')
     row = next((r for r in catalog['rows'] if r['name'] == condition.get('variable')), None)
     if not row or row['type'] not in COMPARABLE:
         raise ValueError('触发变量须为整数或布尔值')
@@ -161,6 +146,15 @@ class MailEngine:
         self.stopping = False
         items = self.items()
         for item in items:
+            schedule = item.get('schedule') or {}
+            if schedule.get('kind') == 'variable':
+                name = schedule.get('value', '').strip().removeprefix('{{').removesuffix('}}').strip()
+                weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                days = list(range(7)) if name == 'global.date' else [i for i, day in enumerate(weekdays) if name == 'global.week.' + day]
+                if days:
+                    item['schedule'] = dict(kind='weekly', weekdays=days, clock=typed_value('time', schedule.get('clock', '00:00')).isoformat())
+                    item['revision'] = secrets.token_hex(12)
+                    # Keep the durable cycle/claim to avoid resending after migration.
             if item['status'] == 'sending':
                 item.update(status='error', error='上次发送被中断，结果不确定；请核实邮箱后再重置或重发')
         self.store.set('mail_templates', items)
@@ -304,7 +298,11 @@ class MailEngine:
                 catalog = self.catalog(current)
                 try:
                     self.require_valid(item, catalog)
-                    target = resolve_time(item['schedule'], catalog)
+                    target = resolve_time(item['schedule'], current)
+                    if target is None:
+                        item['note'] = '今天不在选定的检查日期内，等待下一个检查日'
+                        self.write(item)
+                        continue
                     cycle = stamp(target)
                     if item['cycle'] != cycle:
                         item.update(cycle=cycle, status='waiting', error='', note='')

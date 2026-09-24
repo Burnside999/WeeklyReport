@@ -70,7 +70,16 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     let confirmation='';page.once('dialog',async dialog=>{confirmation=dialog.message();await dialog.accept();});await send.click();await page.getByRole('button',{name:'发送成功',exact:true}).waitFor();assert(confirmation.includes('确定要再次触发'));
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
     await page.locator('#mail-recipients input').fill('auto@example.com');await page.locator('#mail-subject').fill('自动邮件');await page.locator('#mail-body').fill('当前日期 {{global.date}}');
-    await page.locator('input[name=mail_mode][value=auto]').check();await page.locator('#schedule-variable').fill('global.week.friday');await page.locator('#schedule-clock').fill('09:00');
+    await page.locator('input[name=mail_mode][value=auto]').check();assert.equal(await page.locator('#schedule-variable').count(),0);await page.locator('[name=schedule_weekday][value="0"]').check();await page.locator('[name=schedule_weekday][value="4"]').check();await page.locator('#schedule-clock').fill('09:00');
+    await page.locator('[name=schedule_weekday][value="0"]').uncheck();
+    await page.locator('[name=schedule_weekday][value="4"]').uncheck();
+    assert.equal(await page.locator('[name=schedule_weekday]').first().evaluate(e=>e.validity.valid),false);
+    await page.locator('#schedule-kind').selectOption('fixed');
+    assert(await page.locator('#schedule-clock').isDisabled());
+    assert(!(await page.locator('#schedule-fixed').isDisabled()));
+    await page.locator('#schedule-kind').selectOption('weekly');
+    await page.locator('[name=schedule_weekday][value="0"]').check();
+    await page.locator('[name=schedule_weekday][value="4"]').check();
     for(const width of [320,390,600,1280]) {
       await page.setViewportSize({width,height:844});
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`mail form overflow at ${width}`);
@@ -84,7 +93,9 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     assert.equal(await page.locator('#mail-variable, #insert-variable, #condition-hint').count(),0);
     assert.equal(await page.locator('#condition-variable option[value="global.healthy"]').count(),1);
     await page.locator('#condition-variable').selectOption('global.listencount');await page.locator('#condition-value').fill('0');await page.locator('#save-template').click();await page.locator('#template-form').waitFor({state:'hidden'});
-    const waiting=page.getByRole('button',{name:'等待自动触发',exact:true});await waiting.waitFor();assert(await waiting.isDisabled());
+    const templates=await (await page.request.get(base+'/api/templates')).json();
+    assert.deepEqual(templates.find(t=>t.mode==='auto').schedule.weekdays,[0,4]);
+    const waiting=page.getByRole('button',{name:'等待自动触发',exact:true});await waiting.waitFor();assert(await waiting.isDisabled());assert.equal(await waiting.evaluate(e=>getComputedStyle(e).cursor),'not-allowed');
     await page.request.post(base+'/test/tick',{data:{},headers:{'X-Requested-With':'WeeklyReport'}});
     const reset=page.getByRole('button',{name:'重置自动触发',exact:true});await reset.waitFor({timeout:10000});assert(!(await reset.isDisabled()));
     page.once('dialog',d=>d.accept());await reset.click();await waiting.waitFor();
