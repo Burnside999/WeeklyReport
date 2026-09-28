@@ -6,3 +6,5 @@ __pycache__
 **/__pycache__
 tests
 .venv
+desktop
+**/node_modules
