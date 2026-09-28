@@ -1,6 +1,6 @@
 'use strict';
 // Register on both login and workspace pages; never force-reload an open editor.
-window.pwaRegistration = ('serviceWorker' in navigator && window.isSecureContext)
+window.pwaRegistration = (!window.weeklyReportDesktop && 'serviceWorker' in navigator && window.isSecureContext)
   ? navigator.serviceWorker.register('/sw.js', {scope:'/', updateViaCache:'none'}).catch(() => null)
   : Promise.resolve(null);
 window.addEventListener('online', () => document.querySelector('#offline-state')?.setAttribute('hidden',''));

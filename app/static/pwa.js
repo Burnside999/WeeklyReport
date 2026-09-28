@@ -3,6 +3,28 @@
   const workspace=await workspaceReady;
   if(!workspace)return;
   const toggle=$('#push-toggle'),status=$('#push-state');
+  // The desktop main process owns notifications, including while the window is hidden.
+  // Return before creating any browser poller to avoid duplicate notifications.
+  if(window.weeklyReportDesktop){
+    const native=window.weeklyReportDesktop;
+    let state={enabled:false},busy=false;
+    function render(error){
+      toggle.checked=!!state.enabled;toggle.disabled=busy;
+      status.textContent=error || state.error || (state.enabled ? '本设备已开启通知，关闭窗口后仍在托盘接收。' : '仅控制本设备的通知。');
+    }
+    native.onState(value=>{state=value;render();});
+    window.stopDeviceNotifications=async()=>{state=await native.stop();render();};
+    toggle.onchange=async()=>{
+      if(busy)return;
+      const enabled=toggle.checked;busy=true;toggle.disabled=true;
+      try{state=await native.setEnabled(workspace.user.id,enabled);render();}
+      catch(error){render(error.message);}
+      finally{busy=false;toggle.disabled=false;toggle.checked=!!state.enabled;}
+    };
+    try{state=await native.getState(workspace.user.id);render();}
+    catch(error){render(error.message);}
+    return;
+  }
   const key='wr-notifications-'+workspace.user.id;
   const registration=await window.pwaRegistration;
   const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
