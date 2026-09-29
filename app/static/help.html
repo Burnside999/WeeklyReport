@@ -1,129 +1,89 @@
 <section id="help" hidden>
-  <p class="help-author">开发者 <a href="https://github.com/Burnside999" target="_blank" rel="noopener noreferrer">Burnside999 ↗</a></p>
-  <div class="page-heading"><div><p class="eyebrow">USER GUIDE</p><h1>帮助手册</h1></div></div>
-  <p class="intro">从腾讯表格中找出未填写的任务，按条件发邮件，并在你的设备上提醒。</p>
-  <label class="guide-search" for="help-search">查找操作或问题<input id="help-search" type="search" placeholder="例如：未填写、通知、循环" autocomplete="off"></label>
-  <nav class="guide-index" aria-label="手册目录"><a href="#guide-start">首次使用</a><a href="#guide-rules">查询与监听</a><a href="#guide-settings">设置</a><a href="#guide-mail">邮件与通知</a><a href="#guide-variables">变量表</a><a href="#guide-syntax">模板语法</a><a href="#guide-account">帐号与管理</a><a href="#guide-faq">常见问题</a></nav>
+  <div class="page-heading"><div><p class="eyebrow">使用指南</p><h1>帮助手册</h1><p class="help-author">开发者 · <a href="https://github.com/Burnside999" target="_blank" rel="noopener noreferrer">Burnside999 ↗</a></p></div></div>
+  <p class="intro">查谁没填，按时发邮件，及时收提醒。</p>
+  <div class="guide-shortcuts"><a href="#guide-install"><strong>安装应用 <span aria-hidden="true">↗</span></strong><span>Windows / iPhone</span></a><a href="#guide-start"><strong>第一次配置 <span aria-hidden="true">→</span></strong><span>跟着五步开始检查</span></a><a href="#guide-faq"><strong>遇到问题 <span aria-hidden="true">？</span></strong><span>查询、邮件与通知</span></a></div>
+  <label class="guide-search" for="help-search">想找什么？<input id="help-search" type="search" placeholder="搜索操作、变量或问题" autocomplete="off"></label>
+  <nav class="guide-index" aria-label="手册目录"><a href="#guide-install">安装</a><a href="#guide-start">入门</a><a href="#guide-rules">查询与监听</a><a href="#guide-settings">设置</a><a href="#guide-mail">邮件与通知</a><a href="#guide-variables">变量表</a><a href="#guide-syntax">模板语法</a><a href="#guide-account">帐号</a><a href="#guide-faq">FAQ</a></nav>
   <p id="help-search-state" class="help" role="status"></p>
 
-  <details id="guide-start" class="guide-section" open><summary><span class="guide-number">01</span>第一次使用</summary><div class="guide-content">
-    <ol class="guide-steps">
-      <li><strong>新建文档管理器。</strong>登录后点击“＋ 新建文档管理器”；已有文档时，从顶部下拉框最下方新建。填写名称和腾讯在线表格地址，首次使用还需填写腾讯文档凭据。</li>
-      <li><strong>选出要统计的同事。</strong>打开“设置 → 选择数据源”，选名单工作表、分布方向和范围，点击“保存数据源并读取名单”；勾选人员后点击“保存统计范围”。</li>
-      <li><strong>告诉系统检查哪里。</strong>在“监听管理”中新建规则，选择工作表、责任人位置、填写区域和起止范围，保存并启用。</li>
-      <li><strong>核对一次结果。</strong>有合并单元格时，先在设置中“刷新合并结构”，再回到“填写情况”点击“立即查询”。确认结果后打开“开启自动查询”。</li>
-      <li><strong>需要提醒时再配置。</strong>请管理员配置发件邮箱，然后新建邮件模板。需要设备提醒时，将模板“设为主推送”，并在本设备的设置中打开“允许通知”。</li>
-    </ol>
-    <p>顶部下拉框决定当前操作的文档。切换后，名单、监听规则、邮件模板和统计结果都会随之切换。</p>
+  <details id="guide-install" class="guide-section" open><summary><span class="guide-number">01</span>把应用装到电脑或手机</summary><div class="guide-content">
+    <div class="guide-install-grid">
+      <article class="guide-install-card"><p class="guide-platform">电脑</p><h2>Windows</h2><p class="guide-caption">Windows 10 / 11 · 64 位</p>
+        <ol><li>向管理员获取 <code>WeeklyReport-Setup-…-x64.exe</code> 安装包。</li><li>双击安装，完成后打开桌面“周报填写检查”。</li><li>自动连接 <strong>wrret.images.city</strong>，用原帐号登录；连接失败才需输入地址。</li><li>设置 → 允许通知，看到“消息推送启动成功！”即可。</li></ol>
+        <p class="guide-note"><strong>关窗口 ≠ 退出。</strong>完全关闭：任务栏右下角（可能在“∧”里）右键周报图标 → 退出。</p>
+      </article>
+      <article class="guide-install-card"><p class="guide-platform">手机</p><h2>iPhone</h2><p class="guide-caption">添加到主屏幕 · 无需 App Store</p>
+        <ol><li>用 <strong>Safari</strong> 打开 <a href="https://wrret.images.city">wrret.images.city</a>。</li><li>点“共享”（向上箭头；也可能在页面菜单内）→ 添加到主屏幕。</li><li>开启“作为网页 App 打开”（若有），点“添加”。</li><li>从主屏幕周报图标登录 → 设置 → 允许通知 → 系统弹窗选“允许”。</li></ol>
+        <p class="guide-note">后台通知需 iOS 16.4 或以上，且网站已启用推送。请从<strong>主屏幕图标</strong>进入。</p>
+      </article>
+    </div>
+    <p class="guide-support">Android（安卓）与 Linux 暂时不受支持。</p>
+    <details class="guide-extra"><summary>自己下载安装包 / 找不到“添加到主屏幕”？</summary><p>Windows：登录 GitHub，进入<a href="https://github.com/Burnside999/WeeklyReport/actions/workflows/windows.yml" target="_blank" rel="noopener noreferrer">安装包构建页 ↗</a> → 选 develop 最新成功运行 → 底部 Artifacts → 下载 <code>WeeklyReport-Windows-x64</code> → 解压运行 EXE。过期请管理员重新构建。</p><p>iPhone：在共享列表底部点“编辑操作”，添加“添加到主屏幕”。可参阅<a href="https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">苹果图文说明 ↗</a>。</p></details>
   </div></details>
 
-  <details id="guide-rules" class="guide-section"><summary><span class="guide-number">02</span>查询与监听：谁还没填？</summary><div class="guide-content">
-    <dl class="guide-definitions">
-      <dt>立即查询 / 开启自动查询</dt><dd>前者立即检查一次；后者让服务器按设置的间隔持续检查。关闭自动查询后，仍可手动查。关闭网页不会停止服务器的自动查询。</dd>
-      <dt>未填人数 / 未填条目</dt><dd>人数按姓名去重；同一条规则下，同一个人的多项未填任务合并显示。点击工作表名称可打开原表定位检查。</dd>
-      <dt>新增 / 编辑 / 启用 / 删除规则</dt><dd>新增、编辑用来配置检查区域；关闭“启用”会暂停该规则并保留配置；删除则移除规则。删除或改名后，检查引用该规则变量的邮件模板。</dd>
-    </dl>
-    <div class="guide-table"><table><thead><tr><th>分布方式</th><th>如何填写</th></tr></thead><tbody><tr><td>列分布</td><td>人员沿一列向下排列。例如责任人 A 列、检查 C,D 列、范围第 2–100 行。</td></tr><tr><td>行分布</td><td>人员沿一行向右排列。例如责任人第 1 行、检查第 3,4 行、范围 B–Z 列。</td></tr></tbody></table></div>
-    <p>同一任务选中的检查区域中，任意一格有内容即视为已填。责任人合并多行或多列时，整个合并范围算一项任务；该人在其他位置的空任务仍会计入。起止范围必须覆盖完整的合并区域。</p>
-    <p>系统用所选名单中的姓名匹配责任人文本，包括括号内文字。名单中的备注不会自动删除；请保持名单姓名与责任人写法一致，避免短姓名误匹配。</p>
+  <details id="guide-start" class="guide-section"><summary><span class="guide-number">02</span>五步完成首次配置</summary><div class="guide-content">
+    <ol class="guide-steps"><li><strong>新建文档管理器。</strong>点“＋ 新建文档管理器”（也在顶部下拉框内），填名称、腾讯表格地址和凭据。</li><li><strong>选同事。</strong>设置 → 选择数据源 → 指定名单位置并读取 → 勾选人员 → 保存统计范围。</li><li><strong>选检查区域。</strong>监听管理 → 添加规则，选择工作表、责任人位置和填写范围，保存并启用。</li><li><strong>核对结果。</strong>有合并单元格先“刷新合并结构”，再点“立即查询”，确认后开启自动查询。</li><li><strong>配置提醒。</strong>请管理员配置发件邮箱，再新建模板。设备通知需设为主推送，并开启“允许通知”。</li></ol>
+    <p class="guide-note">顶部下拉框切换当前文档；名单、规则、模板和结果都随之切换。</p>
   </div></details>
 
-  <details id="guide-settings" class="guide-section"><summary><span class="guide-number">03</span>设置：名单、合并单元格和通知</summary><div class="guide-content">
-    <dl class="guide-definitions">
-      <dt>保存设置</dt><dd>保存文档管理器名称。文档地址为只读；需要改用另一张表时，新建文档管理器。</dd>
-      <dt>刷新工作表列表</dt><dd>重新读取可选的工作表。新建或改名工作表后使用；数据源和监听规则都通过下拉框选择工作表。</dd>
-      <dt>保存数据源并读取名单</dt><dd>保存姓名所在位置，并重新读取同事名单。名单变化后，再核对勾选范围。</dd>
-      <dt>全选 / 全不选 / 保存统计范围</dt><dd>前两个只改变当前勾选；点击“保存统计范围”才会生效。未勾选的同事不参与统计。</dd>
-      <dt>刷新合并结构</dt><dd>同步表格中的合并单元格位置。新增、拆分或调整合并区域后使用；只改文字不需要每次刷新。</dd>
-      <dt>允许通知</dt><dd>只控制当前设备。开启成功会提示“消息推送启动成功！”，关闭后停止本设备提醒；不改变邮件发送，也不关闭其他设备的通知。</dd>
-      <dt>高级设置 / 保存高级设置</dt><dd>调整自动查询间隔、连接超时，以及 Client ID、Open ID、Access Token。腾讯文档凭据由同一帐号下的文档共用；令牌失效后在这里更新并保存。</dd>
-      <dt>删除该文档管理器</dt><dd>删除本系统内该文档的配置、规则、模板和记录，不会删除腾讯文档原表。请先确认没有需要保留的内容。</dd>
-    </dl>
-    <p>所有完整时间按北京时间显示，格式为 <code>yyyy-mm-dd hh:mm:ss</code>。日期变量只含日期，时刻变量只含时分秒。</p>
+  <details id="guide-rules" class="guide-section"><summary><span class="guide-number">03</span>查询与监听：谁还没填？</summary><div class="guide-content">
+    <dl class="guide-definitions"><dt>立即查询 / 开启自动查询</dt><dd>立即查询检查一次；自动查询按设置间隔持续检查，关闭网页也继续。</dd><dt>未填人数 / 未填条目</dt><dd>人数去重，同一规则下同一个人的空任务合并显示。点工作表名称打开原表。</dd><dt>添加 / 编辑 / 启用 / 删除规则</dt><dd>添加、编辑检查区域；关闭“启用”暂停并保留规则；删除则移除。改名或删除后核对模板引用。</dd></dl>
+    <div class="guide-table"><table><thead><tr><th>人员排列</th><th>配置示例</th></tr></thead><tbody><tr><td>沿一列向下</td><td>选列分布：责任人 A 列，检查 C,D 列，范围 2–100 行。</td></tr><tr><td>沿一行向右</td><td>选行分布：责任人第 1 行，检查第 3,4 行，范围 B–Z 列。</td></tr></tbody></table></div>
+    <p class="guide-note"><strong>任意一格有内容就算已填。</strong>责任人的合并区域算一项任务，范围需覆盖完整；同一人在别处的空任务仍会计入。</p><p>姓名按文本匹配，包括括号内文字；名单备注不会自动去除。请保持姓名写法一致，避免短姓名误匹配。</p>
   </div></details>
 
-  <details id="guide-mail" class="guide-section"><summary><span class="guide-number">04</span>邮件与通知：什么时候提醒？</summary><div class="guide-content">
-    <p>点击“新建模板”，填写 1–5 个接收邮箱、邮件标题和正文。“添加接收人”和“移除”可调整邮箱数量；“保存模板”保存配置，“取消”退出编辑。邮件按纯文本发送，标题不能换行。</p>
-    <dl class="guide-definitions">
-      <dt>手动触发 / 发送邮件</dt><dd>保存后点击“发送邮件”。本页发送成功后按钮禁用，刷新可再次发送；5 分钟内重复触发会要求确认。“发送成功”表示发件服务器已接受，收件箱到达可能稍有延迟。</dd>
-      <dt>自动触发：每周几检查</dt><dd>选择一个或多个星期和当天开始时刻。仅在所选当天、到点后检查条件，当天结束停止；不补发过去检查日的邮件。每个检查日通常触发一次，下一检查日自动重新等待。</dd>
-      <dt>自动触发：固定时刻</dt><dd>填写完整日期和时间，例如 <code>2026-10-09 18:00:00</code>。从该时刻起等待条件满足；不会在当天结束时自动取消。</dd>
-      <dt>变量 / 关系 / 值</dt><dd>配置触发条件。例如“global.personcount → 大于 → 0”代表仍有人未填时提醒。可选整数或布尔变量；布尔值填写 <code>true</code> 或 <code>false</code>。</dd>
-      <dt>等待自动触发 / 重置自动触发</dt><dd>等待状态由系统检查，无需点击。完成或失败后可重置；如果时间和条件已满足，重置可能立即再发，先核实是否已经收到。</dd>
-      <dt>设为主推送 / 取消主推送</dt><dd>每个文档最多选一个模板，也可以不选。该模板触发时，通知显示替换变量后的邮件标题。不同文档独立选择；主推送不改变邮件的接收人或触发条件。</dd>
-    </dl>
-    <p>涉及未填人数或名单的自动模板，需要开始时刻之后的一次成功查询。建议同时开启自动查询。收到设备通知不等于邮件投递成功；发信失败时仍需查看模板状态。</p>
-    <div class="guide-table"><table><thead><tr><th>设备</th><th>接收提醒的条件</th></tr></thead><tbody>
-      <tr><td>Windows 应用</td><td>在设置中开启通知，关闭窗口后仍在托盘接收；托盘“退出”才结束。托盘还能打开页面、重新加载、更换网站和设置开机启动。</td></tr>
-      <tr><td>电脑网页</td><td>允许浏览器通知，并保持至少一个页面打开；支持系统通知时会弹系统提醒。</td></tr>
-      <tr><td>iPhone 主屏幕应用</td><td>先添加到主屏幕，再进入应用开启通知。系统需支持 Web Push，且服务已启用后台推送；普通 Safari 标签页只有页内提醒。</td></tr>
-      <tr><td>Android 网页 / 应用壳</td><td>保持页面运行；支持系统通知时弹系统提醒，否则显示页内提醒。当前不支持关闭应用后的厂商后台推送。</td></tr>
+  <details id="guide-settings" class="guide-section"><summary><span class="guide-number">04</span>设置：名单、合并结构与通知</summary><div class="guide-content">
+    <dl class="guide-definitions"><dt>保存设置 / 刷新工作表列表</dt><dd>保存管理器名称；换表请新建管理器。工作表新增或改名后刷新列表。</dd><dt>保存数据源并读取名单 / 保存统计范围</dt><dd>保存名单位置、读入姓名；全选、全不选仅改变勾选，“保存统计范围”才生效。</dd><dt>刷新合并结构</dt><dd>新增、拆分或调整合并单元格后使用；只改文字不用刷新。</dd><dt>允许通知</dt><dd>只控制本设备。开启成功显示“消息推送启动成功！”，关闭停止本机提醒，不影响邮件或其他设备。</dd><dt>高级设置 / 保存高级设置</dt><dd>调整查询间隔、超时和腾讯文档凭据（Client ID、Open ID、Access Token）后保存。凭据由同一帐号的文档共用。</dd><dt>删除该文档管理器</dt><dd>删除本系统中的配置、规则、模板和记录，不删除腾讯原表。</dd></dl>
+    <p class="guide-note">时间统一为北京时间 <code>yyyy-mm-dd hh:mm:ss</code>；日期变量、时刻变量分别只含日期、时分秒。</p>
+  </div></details>
+
+  <details id="guide-mail" class="guide-section"><summary><span class="guide-number">05</span>邮件与通知：什么时候提醒？</summary><div class="guide-content">
+    <p>新建模板填 1–5 个接收邮箱、标题、正文。“添加接收人 / 移除”调整邮箱，“保存模板”生效，“取消”放弃编辑。纯文本邮件，标题不能换行。</p>
+    <dl class="guide-definitions"><dt>手动：发送邮件</dt><dd>本页成功后按钮禁用，刷新可再发；5 分钟内重复需确认。</dd><dt>自动：每周几检查 / 固定时刻</dt><dd>每周：所选当天到点后检查条件，当天结束停止，不跨天补发，每个检查日触发一次。固定：从指定日期时刻起等待条件满足，不在当天结束时取消。</dd><dt>变量 / 关系 / 值</dt><dd>例如 <code>global.personcount → 大于 → 0</code>，表示还有人没填。可选整数或布尔变量，布尔值用 <code>true</code> / <code>false</code>。</dd><dt>等待自动触发 / 重置自动触发</dt><dd>等待由系统处理；完成或失败后可重置。时间和条件已满足时，重置可能立即再发，请先核对邮箱。</dd><dt>设为主推送 / 取消主推送</dt><dd><strong>每个文档最多一个，也可不选。</strong>此模板触发时，设备提醒显示替换变量后的邮件标题，不改变接收人或条件。</dd></dl>
+    <p class="guide-note">未填数据需到点后成功查询，建议开启自动查询。</p>
+    <p>电脑网页需允许浏览器通知并保持页面打开。首次开启不补发历史消息；Windows 休眠、断网或退出时不实时接收，恢复后只补读有效期内消息。</p>
+  </div></details>
+
+  <details id="guide-variables" class="guide-section"><summary><span class="guide-number">06</span>变量表：把查询结果写进邮件</summary><div class="guide-content">
+    <p>查变量名、类型、含义和值，复制到模板使用。“刷新变量”读当前值，不代替查询。</p>
+    <div class="guide-table"><table><thead><tr><th>变量</th><th>用来做什么</th></tr></thead><tbody>
+      <tr><td><code>global.personcount</code></td><td>未填人数，可作自动触发条件。</td></tr><tr><td><code>global.personlist</code><br><code>global.people</code></td><td>姓名文本（逗号分隔） / 供循环使用的姓名列表。</td></tr><tr><td><code>global.date</code><br><code>global.time</code><br><code>global.lastquery</code></td><td>日期 / 时刻 / 上次查询开始时间。</td></tr><tr><td><code>global.week.duration</code></td><td>本周日期区间。换成 <code>preweek</code> / <code>postweek</code> 为上周 / 下周；<code>global.postweek.monday</code> 为下周一。</td></tr><tr><td><code>global.healthy</code></td><td>1 结果有效；0 查询异常；2 查询中；null 尚无有效结果。</td></tr><tr><td><code>listener1.personcount</code><br><code>listener1.personlist</code></td><td>某规则的未填人数 / 姓名；listener1 换成实际规则变量名。</td></tr><tr><td><code>global.alllistener</code></td><td>全部规则的列表，供循环逐条输出。</td></tr>
     </tbody></table></div>
-    <p>首次开启不补发历史通知。Windows 休眠、断网或退出时不能实时接收，恢复后只补读仍在有效期内的消息。</p>
+    <p class="guide-note"><strong>null 是未知，不是 0。</strong>未查询、查询失败、规则未启用时可能出现；直接引用它不能发送，请先查询。</p>
   </div></details>
 
-  <details id="guide-variables" class="guide-section"><summary><span class="guide-number">05</span>变量表：把实时结果写进邮件</summary><div class="guide-content">
-    <p>变量表是当前文档的只读数据清单。“变量名”用于模板引用，“类型”决定能否比较或循环，“描述”解释用途，“值”是当前内容。点击“刷新变量”可重新读取；它不会代替“立即查询”去检查腾讯表格。</p>
-    <div class="guide-table"><table><thead><tr><th>常用变量</th><th>用途</th></tr></thead><tbody>
-      <tr><td><code>global.personcount</code></td><td>未填人数，可作为自动触发条件。</td></tr>
-      <tr><td><code>global.personlist</code><br><code>global.people</code></td><td>前者是逗号分隔的姓名文本，后者是供循环使用的姓名列表。</td></tr>
-      <tr><td><code>global.date</code><br><code>global.time</code><br><code>global.lastquery</code></td><td>当前日期、当前时刻、上次查询开始时间。</td></tr>
-      <tr><td><code>global.week.duration</code></td><td>本周日期区间。<code>preweek</code>、<code>postweek</code>分别代表上周、下周；例如 <code>global.postweek.monday</code> 是下周一日期。</td></tr>
-      <tr><td><code>global.healthy</code></td><td><code>1</code>：结果有效；<code>0</code>：查询异常；<code>2</code>：正在查询；<code>null</code>：尚无有效结果。</td></tr>
-      <tr><td><code>global.listencount</code><br><code>global.listenenable</code></td><td>规则总数、已启用规则数。</td></tr>
-      <tr><td><code>listener1.personcount</code><br><code>listener1.personlist</code></td><td>某条规则的未填人数与姓名。<code>listener1</code> 要替换为该规则实际的变量名。</td></tr>
-      <tr><td><code>global.alllistener</code></td><td>全部监听规则的列表，可逐条输出规则名称、未填名单等。</td></tr>
-    </tbody></table></div>
-    <p><code>null</code> 表示当前未知，不等于 0，也不等于没人未填。首次未查询、查询失败或规则未启用都可能出现未知值。邮件直接引用未知值时不会发送；先查询成功并核对数据。</p>
-  </div></details>
-
-  <details id="guide-syntax" class="guide-section"><summary><span class="guide-number">06</span>邮件语法与可复制示例</summary><div class="guide-content">
-    <h2>插入一个值</h2><p>在标题或正文写 <code>{{变量名}}</code>，发送时替换为当前值。变量名区分大小写。合法引用显示蓝色，错误引用或语法会标红；红色模板可以保存，但不能触发。</p>
+  <details id="guide-syntax" class="guide-section"><summary><span class="guide-number">07</span>模板语法：从一个例子开始</summary><div class="guide-content">
+    <h2>① 插入变量</h2><p><code>{{变量名}}</code> 会替换成当前值，名称区分大小写。蓝色为合法引用；标红可保存、不能发送。</p>
     <pre class="guide-example"><code>【周报提醒】{{global.date}} 尚有 {{global.personcount}} 人未填写</code></pre>
     <pre class="guide-example"><code>本周：{{global.week.duration}}
 尚未填写：{{global.personlist}}
 请前往填写：{{global.url}}
 上次查询：{{global.lastquery}}</code></pre>
-    <h2>逐个列出姓名</h2><p>列表不能直接放进双花括号，使用 <code>{% for 名称 in 列表 %}</code> 遍历，最后用 <code>{% endfor %}</code> 结束。循环中的名称由你起名，只在对应循环内有效。</p>
+    <h2>② 逐个列出姓名</h2><p>列表要用 <code>for</code> 循环，不能直接放进双花括号。循环名只在循环内有效。</p>
     <pre class="guide-example"><code>{% for person in global.people %}
 • {{person}}
 {% endfor %}</code></pre>
-    <h2>按规则分组，只列出已启用且有人未填的规则</h2>
+    <h2>③ 按规则分组，并筛选</h2><p><code>with</code> 后写条件；下例筛选启用且有人未填的规则。字段带循环名前缀，启用用 <code>true</code>，不用 <code>1</code>。</p>
     <pre class="guide-example"><code>{% for listener in global.alllistener with listener.enable == true and listener.personcount &gt; 0 %}
 {{listener.name}}：{{listener.personcount}} 人未填
 {% for person in listener.people %}
 • {{person}}
 {% endfor %}
 {% endfor %}</code></pre>
-    <p><code>with</code> 后写筛选条件，字段必须带循环名称前缀，例如 <code>listener.enable == true</code>。启用状态是布尔值，请用 <code>true</code>，不要写 <code>1</code>。</p>
-    <h2>只遍历指定规则</h2><p>将下例的 <code>listener1</code>、<code>listener2</code> 换成变量表中真实存在的规则名。</p>
+    <h2>④ 只选指定规则</h2><p>将 listener1、listener2 换成变量表里的真实名称。</p>
     <pre class="guide-example" data-requires-listeners="true"><code>{% for item in [listener1, listener2] with item.enable == true %}
 {{item.name}}：{{item.personlist}}
 {% endfor %}</code></pre>
-    <ul><li>比较支持 <code>==</code>、<code>!=</code>；数字还支持 <code>&gt;</code>、<code>&gt;=</code>、<code>&lt;</code>、<code>&lt;=</code>。字符串用引号括起，如 <code>listener.name == "本周进展"</code>。</li><li>用 <code>and</code>、<code>or</code> 和括号组合条件。类型必须匹配；筛选条件中的未知值会使该项跳过。</li><li>循环最多嵌套 3 层。每个 <code>for</code> 都需对应一个 <code>endfor</code>，循环名称不能与已有变量冲突。</li><li>不支持直接执行代码、函数、算术表达式或 <code>if</code> 标签；条件筛选放在循环的 <code>with</code> 后。</li></ul>
+    <ul><li>比较：<code>== !=</code>，数字还支持 <code>&gt; &gt;= &lt; &lt;=</code>。字符串加引号，如 <code>listener.name == "本周进展"</code>。</li><li>用 <code>and</code>、<code>or</code>、括号组合条件；类型须一致，筛选中遇到未知值会跳过该项。</li><li>循环最多 3 层，每个 <code>for</code> 对应一个 <code>endfor</code>，循环名不能占用已有变量名。</li><li>不支持 <code>if</code>、函数、算术或执行代码；筛选请用 <code>with</code>。</li></ul>
   </div></details>
 
-  <details id="guide-account" class="guide-section"><summary><span class="guide-number">07</span>帐号与管理</summary><div class="guide-content">
-    <p>“记住密码”方便下次登录，“自动登录”允许会话到期后恢复登录；只在可信设备上开启。右上角“退出登录”会退出帐号并停止本设备通知。</p>
-    <dl class="guide-definitions"><dt>普通用户</dt><dd>管理自己的文档、规则和邮件模板，没有“管理”入口。</dd><dt>管理员</dt><dd>可在“管理”中配置 SMTP，创建和管理普通用户。SMTP 是共用的发件设置，接收人仍由各邮件模板填写。</dd><dt>超级管理员</dt><dd>可管理用户权限。删除用户也会删除该用户的文档配置，请谨慎操作。</dd></dl>
-    <p>“保存 SMTP 设置”保存发件服务器、端口、加密方式、邮箱和授权码；具体参数按邮箱服务商提供的信息填写。“新建用户 / 编辑 / 保存用户”管理帐号；编辑时密码留空则保持原密码。用户名为 3–64 位字母、数字、点、下划线或短横线，密码至少 12 个字符。</p>
+  <details id="guide-account" class="guide-section"><summary><span class="guide-number">08</span>帐号与管理</summary><div class="guide-content">
+    <p>只在可信设备开启“记住密码 / 自动登录”。“退出登录”同时停止本设备通知。</p>
+    <dl class="guide-definitions"><dt>普通用户 / 管理员 / 超级管理员</dt><dd>普通用户管理自己的文档；管理员还可配置发件邮箱、管理普通用户；超级管理员可改权限。删除用户会删除其文档配置。</dd><dt>保存 SMTP 设置</dt><dd>按邮箱服务商提供的参数填服务器、端口、加密方式、发件邮箱和授权码。接收人仍在各模板填写。</dd><dt>新建用户 / 编辑 / 保存用户</dt><dd>编辑时密码留空保留原密码。用户名 3–64 位，可用字母、数字、点、下划线、短横线；密码至少 12 个字符。</dd></dl>
   </div></details>
 
-  <details id="guide-faq" class="guide-section"><summary><span class="guide-number">08</span>常见问题 FAQ</summary><div class="guide-content">
-    <dl class="guide-definitions">
-      <dt>明明填了，为什么还显示未填？</dt><dd>先“立即查询”，再核对数据源勾选、责任人位置、检查区域和范围。调整过合并单元格时刷新合并结构；同一人的另一项任务为空，也仍会显示未填。</dd>
-      <dt>明明有人没填，为什么人数为 0？</dt><dd>确认规则已启用、同事已勾选并保存、姓名能匹配责任人。检查区域里任意一格有字即算已填，不会要求所选格子全部填满。</dd>
-      <dt>为什么显示“检查异常”、旧结果或 null？</dt><dd>当前数据尚不可靠。先检查文档访问权限和高级设置中的凭据，再查询一次。旧结果不代表此刻的填写情况，未知值不会被当作 0。</dd>
-      <dt>工作表列表读不到，或 Access Token 失效怎么办？</dt><dd>确认填的是腾讯在线表格地址，帐号有访问权限，三项凭据正确。令牌失效后重新获取并在高级设置保存；当前不会自动续期。然后刷新工作表列表。</dd>
-      <dt>到了时间，为什么自动邮件没发？</dt><dd>核对北京时间、所选星期、触发条件和模板提示。涉及未填数据时，先完成到点后的一次成功查询；模板标红、变量未知或已触发过本周期，也不会再次发送。</dd>
-      <dt>为什么“发送邮件”或“等待自动触发”不能点？</dt><dd>发送中、存在语法错误或本页已经发送成功时会禁用。自动模板由系统触发；已完成或失败后，核实邮箱再使用“重置自动触发”。</dd>
-      <dt>邮件显示成功但没收到？</dt><dd>检查接收地址、垃圾邮件和邮箱规则，稍等后再查看。成功表示发件服务器接受，不保证马上进入收件箱。提示发送结果不确定时，先核实再重发，避免重复。</dd>
-      <dt>打开了通知，为什么没有弹窗？</dt><dd>在当前设备的“设置 → 允许通知”中检查开关，并允许系统或浏览器通知。检查勿扰模式；Windows 应用需留在托盘，网页需保持运行，iPhone 后台提醒需从主屏幕应用开启。还要确认实际触发的是该文档的主推送模板。</dd>
-      <dt>通知有了，邮件却发送失败？</dt><dd>设备通知与邮件是两种提醒途径。查看邮件模板的错误提示，并请管理员检查 SMTP 配置；收到通知不能当作发信成功的凭据。</dd>
-      <dt>改了名单或规则，邮件模板突然标红？</dt><dd>变量名可能已被删除或改名。去变量表找当前名称，修正模板中的引用；红框的错误提示可帮助定位行列。</dd>
-      <dt>提示“已在其他页面修改”怎么办？</dt><dd>先保留未保存的文字，再刷新页面读取最新配置，然后重新编辑保存。</dd>
-      <dt>更新后界面没变化？Windows 要重装吗？</dt><dd>请维护者确认服务器已部署更新，再刷新网页或用 Windows 托盘“重新加载页面”。普通页面和业务更新通常不需要重装客户端；客户端自身功能变化才需要新安装包。</dd>
-    </dl>
+  <details id="guide-faq" class="guide-section"><summary><span class="guide-number">09</span>常见问题 FAQ</summary><div class="guide-content">
+    <dl class="guide-definitions"><dt>填了仍显示未填 / 没填却统计为 0？</dt><dd>先查询，再核对人员、规则、姓名和范围。改过合并区域要刷新结构；具体判定见“查询与监听”。</dd><dt>检查异常、旧结果、null，或读不到工作表？</dt><dd>核对表格地址、权限和凭据。Access Token 不会自动续期，失效需重新获取并保存。刷新列表再查询，勿依赖旧结果。</dd><dt>到点了，自动邮件为什么没发？</dt><dd>核对北京时间、星期、条件和模板状态。未填数据需到点后成功查询；模板标红、变量未知、本周期已触发都不会再发。</dd><dt>按钮不能点，或模板突然标红？</dt><dd>发送中、语法错误、本页已发送成功会禁用按钮；自动模板需等待系统。规则改名、删除后，请到变量表核对引用，按红框的行列提示修正。</dd><dt>邮件显示成功，却没收到？</dt><dd>成功表示发件服务器接受。核对地址、垃圾邮件和邮箱规则，稍等再看；不确定时先核实再重发。</dd><dt>开了通知却没有弹窗？</dt><dd>检查本设备开关、浏览器或系统权限、勿扰模式，以及实际触发的是否为主推送。Windows 要留在托盘，网页要保持打开，iPhone 要从主屏幕应用开启。</dd><dt>收到通知，但邮件失败？</dt><dd>两者独立。查看模板错误提示，请管理员核对 SMTP；通知不能证明邮件发送成功。</dd><dt>提示“已在其他页面修改”？</dt><dd>保留未保存的文字，刷新读取最新配置后再编辑。</dd><dt>更新后没变化？Windows 要重装吗？</dt><dd>先确认服务器已部署，再刷新网页或用托盘“重新加载页面”。网页业务更新通常不用重装；托盘、连接等客户端功能变化才需新安装包。</dd></dl>
   </div></details>
-  <p class="guide-footer">还没配好？从<a href="#guide-start">首次使用的五个步骤</a>逐项核对。</p>
+  <div class="guide-tour-start"><div><h2>跟着界面走一遍</h2><p>认识常用入口，随时退出。</p></div><button id="start-tour" class="primary" type="button">开始教程引导</button></div>
 </section>

@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'none'; base-uri 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>连接周报服务</title><link rel="stylesheet" href="settings.css"></head>
 <body><main><img src="../assets/icon.png" width="56" height="56" alt=""><h1>连接周报服务</h1>
-<p>输入周报网站地址，连接后使用原来的帐号登录。</p>
-<form id="settings"><label for="server">网站地址</label><input id="server" type="url" required placeholder="https://dev.images.city" autocomplete="url">
+<p>默认连接周报网站。连接失败时，先检查网络，再重试；使用其他服务时可修改地址。</p>
+<form id="settings"><label for="server">网站地址</label><input id="server" type="url" required placeholder="https://wrret.images.city" autocomplete="url">
 <p class="hint">关闭主窗口后仍在托盘接收通知。右键托盘图标可退出或更换网站。</p>
 <p id="error" role="alert"></p><button type="submit">保存并连接</button></form></main><script src="settings.js"></script></body></html>

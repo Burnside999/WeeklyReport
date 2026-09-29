@@ -1,16 +1,17 @@
 'use strict';
-const { app, BrowserWindow, Menu, Tray, Notification, ipcMain, session, nativeImage, dialog, powerMonitor } = require('electron');
+const { app, BrowserWindow, Menu, Tray, Notification, ipcMain, session, nativeImage, dialog, powerMonitor, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const { serverOrigin, sameOrigin, documentURL, trustedSender } = require('./security.cjs');
+const { serverOrigin, sameOrigin, documentURL, trustedSender, externalLink } = require('./security.cjs');
 const { NotificationClient } = require('./notifications.cjs');
 
 app.setAppUserModelId('city.images.weeklyreport');
 const locked = app.requestSingleInstanceLock();
 if (!locked) app.quit();
 let window, settings, tray, client, config, configPath, webSession, origin, timer, quitting = false, settingsError = '';
+const DEFAULT_SERVER = 'https://wrret.images.city';
 const visibleNotifications = new Set();
 const settingsURL = pathToFileURL(path.join(__dirname, 'ui/settings.html')).href;
 const iconPath = path.join(__dirname, 'assets/icon.png');
@@ -102,23 +103,60 @@ function configureServer(value) {
       contextIsolation: true, sandbox: true, webSecurity: true, webviewTag: false, backgroundThrottling: false } });
   const current = window;
   current.removeMenu();
-  current.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  current.webContents.setWindowOpenHandler(({ url }) => {
+    if (externalLink(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
+  });
   current.webContents.on('will-attach-webview', event => event.preventDefault());
-  current.webContents.on('will-navigate', (event, url) => { if (!sameOrigin(event.url || url, origin)) event.preventDefault(); });
+  current.webContents.on('will-navigate', (event, url) => {
+    const target = event.url || url;
+    if (!sameOrigin(target, origin)) { event.preventDefault(); if (externalLink(target)) shell.openExternal(target).catch(() => {}); }
+  });
   current.webContents.on('will-redirect', (event, url) => { if (!sameOrigin(event.url || url, origin)) event.preventDefault(); });
   current.webContents.on('render-process-gone', () => { if (!quitting && !current.isDestroyed()) current.reload(); });
-  current.once('ready-to-show', () => current.show());
-  current.on('close', event => { if (!quitting && tray && !tray.isDestroyed()) { event.preventDefault(); current.hide(); } });
-  current.on('closed', () => { if (window === current) window = null; });
-  current.webContents.on('did-fail-load', (_event, code, _description, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3 && !quitting) openSettings('无法连接周报网站，请检查地址和网络后重试。');
+
+  let closePrompt = false;
+  current.on('close', event => {
+    if (quitting || !tray || tray.isDestroyed()) return;
+    event.preventDefault();
+    if (closePrompt) return;
+    closePrompt = true;
+    dialog.showMessageBox(current, { type: 'info', title: '继续在后台运行',
+      message: '关闭窗口后，应用会隐藏到系统托盘',
+      detail: '应用仍会接收通知。要完全关闭，请在任务栏右下角（可能收在“∧”中）找到周报图标，右键选择“退出”。',
+      buttons: ['隐藏到托盘', '取消'], defaultId: 0, cancelId: 1 })
+      .then(result => { if (result.response === 0 && !current.isDestroyed()) current.hide(); })
+      .catch(() => {}).finally(() => { closePrompt = false; });
   });
-  current.loadURL(origin + '/').catch(() => {});
+  current.on('closed', () => { if (window === current) window = null; });
+  // A stalled connection or an HTTP error also needs an escape to manual setup.
+  let connecting = true;
+  const failed = () => {
+    clearTimeout(connectionTimer);
+    if (!connecting || quitting || current.isDestroyed() || window !== current) return;
+    connecting = false;
+    current.hide();
+    openSettings('无法连接 ' + origin + '。请检查网络后重试，或修改网站地址。');
+  };
+  const connectionTimer = setTimeout(failed, 15000);
+  current.on('closed', () => clearTimeout(connectionTimer));
+  current.webContents.on('did-fail-load', (_event, code, _description, _url, isMainFrame) => {
+    if (isMainFrame && code !== -3) failed();
+  });
+  current.webContents.on('did-navigate', (_event, _url, responseCode) => {
+    if (responseCode >= 400) failed();
+  });
+  current.loadURL(origin + '/').then(() => {
+    clearTimeout(connectionTimer);
+    if (!connecting || current.isDestroyed()) return;
+    connecting = false;
+    current.show();
+  }).catch(failed);
   sendState(client.status());
 }
 function openSettings(error = '') {
   settingsError = error;
-  if (settings && !settings.isDestroyed()) { settings.show(); settings.focus(); return; }
+  if (settings && !settings.isDestroyed()) { settings.reload(); settings.show(); settings.focus(); return; }
   settings = new BrowserWindow({ width: 610, height: 600, resizable: false, title: '连接周报服务', icon: iconPath,
     webPreferences: { preload: path.join(__dirname, 'settings-preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false } });
   settings.removeMenu();
@@ -143,7 +181,7 @@ ipcMain.handle('notifications:toggle', async (event, uid, enabled) => {
 ipcMain.handle('notifications:stop', event => { requireRemote(event); closeNotifications(); return client.disable(); });
 ipcMain.handle('settings:read', event => {
   if (!settingsSender(event)) throw new Error('不允许的请求来源');
-  return { server: config.server, error: settingsError };
+  return { server: config.server || DEFAULT_SERVER, error: settingsError };
 });
 ipcMain.handle('settings:save', (event, value) => {
   if (!settingsSender(event)) throw new Error('不允许的请求来源');
@@ -169,8 +207,8 @@ if (locked) app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 32, height: 32 }));
   tray.setToolTip('周报填写检查'); tray.on('double-click', showWindow); trayMenu();
-  if (config.server) { try { configureServer(config.server); } catch { openSettings('保存的网站地址无效，请重新填写。'); } }
-  else openSettings();
+  if (!config.server) { config.server = DEFAULT_SERVER; writeConfig(); }
+  try { configureServer(config.server); } catch { openSettings('保存的网站地址无效，请重新填写。'); }
   timer = setInterval(() => client?.poll(), 15000);
   powerMonitor.on('resume', () => client?.poll());
   app.on('activate', showWindow);

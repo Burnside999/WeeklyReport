@@ -20,4 +20,14 @@ function trustedSender(event, window, origin) {
   return !!window && !window.isDestroyed() && event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame && sameOrigin(event.senderFrame.url, origin);
 }
-module.exports = { serverOrigin, sameOrigin, documentURL, trustedSender };
+// Help links open in the system browser; remote content gains no arbitrary URL access.
+function externalLink(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+    return (url.hostname === 'github.com' &&
+      (url.pathname === '/Burnside999' || url.pathname === '/Burnside999/WeeklyReport' || url.pathname.startsWith('/Burnside999/WeeklyReport/'))) ||
+      (url.hostname === 'support.apple.com' && url.pathname === '/zh-cn/guide/iphone/iphea86e5236/ios');
+  } catch { return false; }
+}
+module.exports = { serverOrigin, sameOrigin, documentURL, trustedSender, externalLink };

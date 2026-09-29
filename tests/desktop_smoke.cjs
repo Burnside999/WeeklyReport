@@ -4,6 +4,10 @@
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
+const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'weeklyreport-smoke-'));
+fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({server:'http://127.0.0.1:18081'}));
 const { _electron } = require('../desktop/node_modules/playwright');
 const base = 'http://127.0.0.1:18081';
 const server = spawn('python', ['tests/browser_server.py'], { env: { ...process.env, PYTHONPATH: process.cwd(), PYTHONUNBUFFERED: '1' }, stdio: 'inherit' });
@@ -18,7 +22,7 @@ async function until(check, timeout = 30000) {
     await until(async () => { try { return (await fetch(base + '/healthz')).ok; } catch { return false; } });
     desktop = await _electron.launch({
       executablePath: process.env.DESKTOP_EXE || require('../desktop/node_modules/electron'),
-      args: process.env.DESKTOP_EXE ? [] : [path.resolve('desktop'), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
+      args: [...(process.env.DESKTOP_EXE ? [] : [path.resolve('desktop')]), '--user-data-dir='+userData, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
       env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' }
     });
     desktop.on('window', page => {
@@ -32,8 +36,8 @@ async function until(check, timeout = 30000) {
       Notification.prototype.show = function () { globalThis.smokeNotices.push({ title: this.title, body: this.body }); this.emit('show'); };
       Notification.prototype.close = function () { this.emit('close'); };
     });
-    const setup = await desktop.firstWindow();
-    await setup.locator('#server').fill(base); await setup.locator('button').click();
+    // Saved servers connect directly; clean-install defaults are covered by lifecycle tests.
+    await desktop.firstWindow();
     const page = await until(async () => desktop.windows().find(p => p.url().startsWith(base)));
     // This smoke test checks native IPC and notifications. Disable decorative
     // page transitions so their snapshot layer cannot consume the first click.
@@ -62,9 +66,18 @@ async function until(check, timeout = 30000) {
       await write('me/primary-trigger', { document_id: did, trigger_id: item.id });
       return item;
     }, { did, title });
+    // Check both Cancel and Hide in the native close prompt.
+    await desktop.evaluate(({ dialog }) => {
+      globalThis.closePrompts = []; globalThis.closeResponse = 1;
+      dialog.showMessageBox = async (_window, options) => { globalThis.closePrompts.push(options); return {response:globalThis.closeResponse}; };
+    });
+    await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+    assert(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), 'cancel keeps window open');
+    await desktop.evaluate(() => { globalThis.closeResponse = 0; });
     // The close action must hide, keeping the real main-process poller alive.
     await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('http://127.0.0.1')).close());
-    assert.equal(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), false);
+    await until(async () => !await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()));
+    assert.match(await desktop.evaluate(() => globalThis.closePrompts.at(-1).detail), /右键.*退出/);
     await page.evaluate(async ({ did, item }) => {
       const response = await fetch('/api/templates/' + item.id + '/send', { method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'WeeklyReport', 'X-Document-ID': did }, body: JSON.stringify({ revision: item.revision }) });
@@ -91,5 +104,5 @@ async function until(check, timeout = 30000) {
       if (process.env.DESKTOP_SCREENSHOT) await page.screenshot({ path: process.env.DESKTOP_SCREENSHOT.replace('.png', '-failure.png') }).catch(() => {});
     }
     throw error;
-  } finally { if (desktop) await desktop.close(); server.kill(); }
+  } finally { if (desktop) await desktop.close(); server.kill(); fs.rmSync(userData,{recursive:true,force:true,maxRetries:3}); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

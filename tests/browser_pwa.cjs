@@ -94,6 +94,8 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     // network requests. Stop the fixture to test a real network failure instead.
     const stopped=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');await stopped;
     await page.reload();await page.getByRole('heading',{name:'暂时无法连接'}).waitFor();
+    assert(await page.locator('.brand-mark').evaluate(el=>el.tagName==='IMG' && el.complete && el.naturalWidth>0),'app icon is available offline');
+    assert.equal(await page.locator('link[rel=icon]').getAttribute('href'),'/static/icon-192.png');
     assert.deepEqual(errors,[]);console.log('PWA install guidance, primary selection, login deep link, mobile layout and offline browser tests passed');
   } finally {if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(error=>{console.error(error);process.exitCode=1;});

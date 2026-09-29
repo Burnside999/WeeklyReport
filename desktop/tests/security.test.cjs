@@ -21,3 +21,9 @@ test('IPC requires exact webContents, top frame and configured origin', () => {
   frame.url = 'https://evil.example/';
   assert(!trustedSender({ sender: contents, senderFrame: frame }, window, 'https://dev.images.city'));
 });
+
+test('only documented HTTPS help links open externally', () => {
+  const {externalLink} = require('../security.cjs');
+  for (const url of ['https://github.com/Burnside999','https://github.com/Burnside999/WeeklyReport/actions/workflows/windows.yml','https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/ios']) assert.equal(externalLink(url),true,url);
+  for (const url of ['file:///etc/passwd','javascript:alert(1)','https://github.com.evil.test/Burnside999','https://github.com/Burnside999/Other','https://github.com/Burnside999/WeeklyReport-evil','https://user@github.com/Burnside999','https://github.com:444/Burnside999','http://github.com/Burnside999']) assert.equal(externalLink(url),false,url);
+});
