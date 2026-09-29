@@ -6,7 +6,7 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const { _electron } = require('../desktop/node_modules/playwright');
 const base = 'http://127.0.0.1:18081';
-const server = spawn('python', ['tests/browser_server.py'], { env: { ...process.env, PYTHONPATH: process.cwd() }, stdio: 'inherit' });
+const server = spawn('python', ['tests/browser_server.py'], { env: { ...process.env, PYTHONPATH: process.cwd(), PYTHONUNBUFFERED: '1' }, stdio: 'inherit' });
 async function until(check, timeout = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeout) { const result = await check(); if (result) return result; await new Promise(r => setTimeout(r, 150)); }
@@ -20,6 +20,11 @@ async function until(check, timeout = 30000) {
       executablePath: process.env.DESKTOP_EXE || require('../desktop/node_modules/electron'),
       args: process.env.DESKTOP_EXE ? [] : [path.resolve('desktop'), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
       env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' }
+    });
+    desktop.on('window', page => {
+      page.on('pageerror', error => console.error('Renderer error:', error.message));
+      page.on('requestfailed', request => console.error('Request failed:', request.url(), request.failure()?.errorText));
+      page.on('response', response => { if (response.status() >= 400) console.error('HTTP error:', response.status(), response.url()); });
     });
     await desktop.evaluate(({ Notification }) => {
       globalThis.smokeNotices = [];
@@ -73,5 +78,11 @@ async function until(check, timeout = 30000) {
     assert.equal(await page.locator('#push-toggle').isChecked(), false, 'logout disables native notifications');
     if (process.env.DESKTOP_SCREENSHOT) await page.screenshot({ path: process.env.DESKTOP_SCREENSHOT });
     console.log('Installed desktop smoke passed: login, cookies, native bridge, single welcome, hidden-window delivery, toggle, logout');
+  } catch (error) {
+    if (desktop) for (const page of desktop.windows()) {
+      console.error('Window diagnostic:', page.url(), await page.locator('body').innerText({ timeout: 3000 }).catch(() => 'No document body'));
+      if (process.env.DESKTOP_SCREENSHOT) await page.screenshot({ path: process.env.DESKTOP_SCREENSHOT.replace('.png', '-failure.png') }).catch(() => {});
+    }
+    throw error;
   } finally { if (desktop) await desktop.close(); server.kill(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

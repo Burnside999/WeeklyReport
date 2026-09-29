@@ -104,8 +104,8 @@ function configureServer(value) {
   current.removeMenu();
   current.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   current.webContents.on('will-attach-webview', event => event.preventDefault());
-  current.webContents.on('will-navigate', (event, url) => { if (!sameOrigin(url, origin)) event.preventDefault(); });
-  current.webContents.on('will-redirect', (event, url) => { if (!sameOrigin(url, origin)) event.preventDefault(); });
+  current.webContents.on('will-navigate', (event, url) => { if (!sameOrigin(event.url || url, origin)) event.preventDefault(); });
+  current.webContents.on('will-redirect', (event, url) => { if (!sameOrigin(event.url || url, origin)) event.preventDefault(); });
   current.webContents.on('render-process-gone', () => { if (!quitting && !current.isDestroyed()) current.reload(); });
   current.once('ready-to-show', () => current.show());
   current.on('close', event => { if (!quitting && tray && !tray.isDestroyed()) { event.preventDefault(); current.hide(); } });
