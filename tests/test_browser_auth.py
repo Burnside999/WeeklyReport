@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
 from app.main import create_app
 from auth_support import encrypt
@@ -28,6 +30,20 @@ class BrowserAuthTests(unittest.IsolatedAsyncioTestCase):
 
     async def login(self, **options):
         return await self.client.post('/api/login',json=dict(username='admin',encrypted_password=await self.envelope(),**options))
+
+    async def test_html_uses_utf8_even_with_windows_default_encoding(self):
+        original = Path.read_text
+        def windows_read(path, *args, **kwargs):
+            kwargs.setdefault('encoding', 'cp1252')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'read_text', windows_read):
+            response = await self.client.get('/login')
+            self.assertEqual(response.status, 200)
+            self.assertIn('周报填写检查', await response.text())
+            await self.login()
+            response = await self.client.get('/')
+            self.assertEqual(response.status, 200)
+            self.assertIn('允许通知', await response.text())
 
     async def test_encryption_replay_tampering_and_plaintext_rejection(self):
         body=dict(username='admin',encrypted_password=await self.envelope())

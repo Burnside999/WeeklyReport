@@ -345,7 +345,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def page(request):
         name = 'login.html' if request.path == '/login' else 'index.html'
-        return web.Response(text=(ROOT / name).read_text(), content_type='text/html')
+        return web.Response(text=(ROOT / name).read_text(encoding='utf-8'), content_type='text/html')
 
     async def static(request):
         name = request.match_info['name']
