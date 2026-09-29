@@ -35,9 +35,13 @@ async function until(check, timeout = 30000) {
     const setup = await desktop.firstWindow();
     await setup.locator('#server').fill(base); await setup.locator('button').click();
     const page = await until(async () => desktop.windows().find(p => p.url().startsWith(base)));
+    // This smoke test checks native IPC and notifications. Disable decorative
+    // page transitions so their snapshot layer cannot consume the first click.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('#username').fill('admin'); await page.locator('#password').fill('browser-test-password');
     await page.locator('#login button').click(); await page.waitForURL(u => u.pathname === '/');
     await page.locator('#nav-settings').click();
+    await page.waitForURL(u => u.pathname === '/settings');
     await page.waitForFunction(() => !document.querySelector('#push-toggle').disabled);
     assert.equal(await page.evaluate(() => typeof require), 'undefined', 'remote content cannot access Node');
     assert.equal(await page.evaluate(() => window.weeklyReportDesktop.platform), 'windows');
@@ -76,6 +80,7 @@ async function until(check, timeout = 30000) {
     await page.locator('#username').fill('admin'); await page.locator('#password').fill('browser-test-password');
     await page.locator('#login button').click(); await page.waitForURL(u => u.pathname === '/');
     await page.locator('#nav-settings').click();
+    await page.waitForURL(u => u.pathname === '/settings');
     await page.waitForFunction(() => !document.querySelector('#push-toggle').disabled);
     assert.equal(await page.locator('#push-toggle').isChecked(), false, 'logout disables native notifications');
     if (process.env.DESKTOP_SCREENSHOT) await page.screenshot({ path: process.env.DESKTOP_SCREENSHOT });
