@@ -100,13 +100,14 @@
     $('#schedule-weekly-fields').hidden=!weekly;$('#schedule-weekly-fields').disabled=!weekly;
     $('#schedule-fixed-fields').hidden=weekly;$('#schedule-fixed').disabled=weekly;
     form.querySelector('[name=schedule_weekday]').setCustomValidity(weekly && !days.length?'请至少选择一个检查日':'');
-    $('#schedule-preview').textContent=weekly ? (days.length?'每逢'+days.map(d=>weekdayNames[d]).join('、')+' '+$('#schedule-clock').value+' 开始检查，当天有效':'请至少选择一个检查日') : ($('#schedule-fixed').value?'固定时刻：'+$('#schedule-fixed').value+'（北京时间）':'请选择固定日期和时间');
+    $('#schedule-preview').textContent=weekly && !days.length ? '请至少选择一个检查日' : '';
   }
   function modeFields() {
     const auto=form.elements.mail_mode.value==='auto';$('#automatic-fields').hidden=!auto;$('#automatic-fields').disabled=!auto;scheduleFields();
   }
   form.querySelectorAll('[name=mail_mode]').forEach(input=>input.onchange=modeFields);
   for(const id of ['schedule-kind','schedule-clock','schedule-fixed']) $('#'+id).addEventListener('input',scheduleFields);
+  $('#schedule-clock').addEventListener('blur',()=>{$('#schedule-clock').value=formatClock($('#schedule-clock').value);});
   form.querySelectorAll('[name=schedule_weekday]').forEach(input=>input.onchange=scheduleFields);
   $('#condition-variable').onchange=conditionInput;
   async function edit(item=null) {
@@ -117,8 +118,8 @@
     subject.value=item?.subject || '';body.value=item?.body || '';form.elements.mail_mode.value=item?.mode || 'manual';
     $('#schedule-kind').value=item?.schedule?.kind==='fixed'?'fixed':'weekly';
     form.querySelectorAll('[name=schedule_weekday]').forEach(input=>input.checked=(item?.schedule?.weekdays || [4]).includes(Number(input.value)));
-    $('#schedule-clock').value=item?.schedule?.clock || '09:00';
-    $('#schedule-fixed').value=item?.schedule?.kind==='fixed'?item.schedule.value.slice(0,19):'';
+    $('#schedule-clock').value=formatClock(item?.schedule?.clock || '09:00:00');
+    $('#schedule-fixed').value=item?.schedule?.kind==='fixed'?formatDateTime(item.schedule.value):'';
     const variable=item?.condition?.variable || 'global.personcount';
     if(!catalog.rows.some(r=>r.name===variable && comparable.has(r.type))) {
       const option=new Option(variable+'（请重新选择）',variable);option.disabled=true;$('#condition-variable').append(option);
@@ -141,7 +142,7 @@
     }
     try {const saved=await api('templates'+(editing?'/'+editing.id:''),editing?'PUT':'POST',data);if(editing && saved.revision!==editing.revision)sentThisPage.delete(editing.id);form.hidden=true;toast('邮件模板已保存');await load();}catch(error){toast(error.message);}finally{button.disabled=false;}
   };
-  const mailTime = value => value ? new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}) : '尚未触发';
+  const mailTime = value => formatDateTime(value, '尚未触发');
   function renderList() {
     const list=$('#template-list');list.replaceChildren();
     if(!items.length) {const empty=el('div',undefined,'empty panel');empty.append(el('h3','还没有邮件模板'),el('p','新建模板，选择接收人并编写邮件。'));list.append(empty);}
@@ -160,9 +161,9 @@
       heading.append(el('h3',item.subject),badges);card.append(heading);
       card.append(el('p',item.recipients.join('、'),'rule-meta'),el('p','上次触发：'+mailTime(item.last_trigger),'help'));
       if(item.last_success)card.append(el('p','上次发送成功：'+mailTime(item.last_success),'help'));
-      if(item.mode==='auto')card.append(el('p',`${item.schedule.kind==='weekly'?'每逢 '+item.schedule.weekdays.map(d=>weekdayNames[d]).join('、')+' '+item.schedule.clock+'（仅当天）':item.schedule.kind==='fixed'?item.schedule.value+' 后':'旧时间配置，请重新编辑'} · ${item.condition.variable} ${{gt:'>',lt:'<',eq:'='}[item.condition.operator]} ${item.condition.value}`,'rule-meta'));
-      if(item.error)card.append(el('p',item.error,'error'));
-      else if(item.note && item.mode==='auto')card.append(el('p',item.note,'help'));
+      if(item.mode==='auto')card.append(el('p',`${item.schedule.kind==='weekly'?'每逢 '+item.schedule.weekdays.map(d=>weekdayNames[d]).join('、')+' '+formatClock(item.schedule.clock):item.schedule.kind==='fixed'?formatDateTime(item.schedule.value)+' 后':'旧时间配置，请重新编辑'} · ${item.condition.variable} ${{gt:'>',lt:'<',eq:'='}[item.condition.operator]} ${item.condition.value}`,'rule-meta'));
+      if(item.error)card.append(el('p',formatEventText(item.error),'error'));
+      else if(item.note && item.mode==='auto')card.append(el('p',formatEventText(item.note),'help'));
       const actions=el('div',undefined,'rule-actions'), tools=el('div'), editButton=el('button','编辑','quiet'), remove=el('button','删除','quiet danger');
       editButton.onclick=()=>edit(item);remove.onclick=async()=>{if(!confirm('删除此邮件模板？'))return;try{await api('templates/'+item.id,'DELETE',{revision:item.revision});if(editing?.id===item.id)form.hidden=true;await load();}catch(error){toast(error.message);}};
       const choose=el('button',isPrimary?'取消主推送':'设为主推送','quiet');
@@ -211,4 +212,3 @@
   load();setInterval(()=>{if(!document.hidden && !actionBusy)load();},5000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
 })().catch(error=>toast(error.message));
-

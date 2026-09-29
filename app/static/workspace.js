@@ -1,6 +1,6 @@
 'use strict';
 const $ = s => document.querySelector(s);
-const page = ({'/mail':'mail','/variables':'variables','/settings':'settings','/manage':'manage','/admin':'admin'})[location.pathname] || 'home';
+const page = ({'/mail':'mail','/variables':'variables','/settings':'settings','/manage':'manage','/admin':'admin','/help':'help'})[location.pathname] || 'home';
 let documentId = '', account = null, documentList = [], toastTimer;
 function el(tag,text,cls) {const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;}
 function toast(message) {clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
@@ -31,20 +31,20 @@ const workspaceReady=(async()=>{
   const key='wr_document:'+account.id;
   const selected=requested || sessionStorage.getItem(key);
   documentId=data.documents.find(d=>d.id===selected)?.id || data.documents[0]?.id || '';
-  if(documentId){sessionStorage.setItem(key,documentId);history.replaceState(null,'',documentLocation(documentId));}
+  if(documentId){sessionStorage.setItem(key,documentId);history.replaceState(null,'',documentLocation(documentId)+location.hash);}
   showDocuments(data);
   const isAdmin=account.role!=='user';
   $('#nav-admin').hidden=!isAdmin;
   if(page==='admin' && !isAdmin){location.replace('/');return null;}
-  $('.bottom-nav').hidden=!documentId && !isAdmin;
-  for(const name of ['home','manage','mail','settings','variables','admin']) {
-    const visible=name===page && (name==='admin'?isAdmin:!!documentId);
+  $('.bottom-nav').hidden=false;
+  for(const name of ['home','manage','mail','settings','variables','help','admin']) {
+    const visible=name===page && (name==='help' || (name==='admin'?isAdmin:!!documentId));
     $('#'+name).hidden=!visible;
-    $('#nav-'+name).hidden=name==='admin'?!isAdmin:!documentId;
+    $('#nav-'+name).hidden=name==='help'?false:name==='admin'?!isAdmin:!documentId;
     $('#nav-'+name).classList.toggle('active',visible);
     if(visible)$('#nav-'+name).setAttribute('aria-current','page');
   }
-  $('#no-documents').hidden=!!documentId || page==='admin';
+  $('#no-documents').hidden=!!documentId || page==='admin' || page==='help';
   const openCreate=async()=>{
     try {
       const fresh=await api('me'),form=$('#document-form');form.reset();form.elements.name.value=fresh.next_name;

@@ -105,12 +105,63 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 
 .axis-fields{border:0;padding:0;margin:0;min-width:0}.distribution-options{margin:20px 0 0}.distribution-options .checkbox{margin:8px 0 0}
 
-.weekday-options{display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:12px}
 
-/* Device notifications fit the existing mobile-first cards. */
-.push-panel {margin-top:16px}
-.push-panel summary {cursor:pointer}
-.push-actions {display:flex;flex-wrap:wrap;gap:8px}
-.push-panel p {overflow-wrap:anywhere}
-.trigger-badges{display:flex;gap:6px;flex-shrink:0}.badge.primary-push-badge{background:#ffe0a3;color:#863b00;border:1px solid #edb54b;font-weight:750}.rule-top h3{min-width:0}.push-panel .auto-query-toggle{margin:0;justify-content:space-between}.push-panel .help{margin-bottom:0}
+
+.trigger-badges{display:flex;gap:6px;flex-shrink:0}.badge.primary-push-badge{background:#ffe0a3;color:#863b00;border:1px solid #edb54b;font-weight:750}.rule-top h3{min-width:0}
 .rule-actions>div {display:flex;flex-wrap:wrap;gap:4px}
+
+/* Shared switch row: the notification setting has no surrounding card. */
+#device-notifications{margin:0 0 14px}
+#device-notifications .auto-query-toggle{margin:0}
+#push-state{margin:8px 3px 0;overflow-wrap:anywhere}
+
+/* Equal-width weekday controls retain native checkbox semantics and focus. */
+#automatic-fields{padding:14px;margin:16px 0}
+#automatic-fields legend{padding:0 6px}
+#schedule-weekly-fields{margin:12px 0}
+#schedule-weekly-fields legend{padding:0}
+.weekday-options{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:8px 0 12px}
+.weekday-choice{position:relative;display:block;margin:0;min-width:0;cursor:pointer}
+.weekday-choice input{position:absolute;inset:0;width:100%;height:100%;min-height:44px;margin:0;opacity:0;cursor:pointer}
+.weekday-choice span{display:flex;justify-content:center;align-items:center;min-height:44px;border:1px solid #dce4dc;border-radius:8px;background:#fff;color:#536659;font-size:13px;font-weight:500;white-space:nowrap}
+.weekday-choice input:checked+span{background:var(--green);border-color:var(--green);color:#fff;font-weight:650;box-shadow:inset 0 -3px 0 #ffffff40}
+.weekday-choice input:focus-visible+span{outline:3px solid #72bca1;outline-offset:2px}
+.weekday-choice input:disabled+span{opacity:.5}
+#schedule-weekly-fields>label{margin:0}
+#automatic-fields>label,#automatic-fields .grid2 label{margin-top:12px}
+#automatic-fields #schedule-preview{margin:6px 0;color:#a13c35}
+#schedule-fixed{font-variant-numeric:tabular-nums;font-size:14px}
+
+/* The guide uses one quiet list, with details revealed only when needed. */
+.help-author{margin:0 0 20px;font-size:12px;color:var(--muted)}
+.help-author a{margin-left:8px;font-weight:650;text-decoration:underline;text-underline-offset:3px}
+#help .page-heading{margin-bottom:18px}
+#help .intro{margin-bottom:18px}
+.guide-search{margin:0}.guide-search input{background:white}
+.guide-index{display:flex;flex-wrap:wrap;gap:8px 18px;margin:16px 0 22px}
+.guide-index a{font-size:13px;line-height:2;text-decoration:underline;text-underline-offset:4px}
+.guide-section{border-top:1px solid var(--line);scroll-margin-top:20px}
+.guide-section>summary{padding:18px 0;min-height:60px;font-size:15px}
+.guide-section[open]>summary{padding-bottom:16px;border-bottom:0}
+.guide-section .guide-number{margin:0 4px 0 0;font:12px/1.5 ui-monospace,monospace;color:var(--muted)}
+.guide-content{padding:0 0 22px;font-size:14px;line-height:1.9;overflow-wrap:anywhere}
+.guide-content p{margin:12px 0}
+.guide-content p:first-child{margin-top:0}
+.guide-content h2{font-size:15px;margin:20px 0 8px}
+.guide-content h2:first-child{margin-top:0}
+.guide-content ol,.guide-content ul{padding-left:22px;margin:0}
+.guide-content li+li{margin-top:10px}
+.guide-definitions{margin:0}
+.guide-definitions dt{font-weight:650;margin:16px 0 4px;color:#294f3a}
+.guide-definitions dt:first-child{margin-top:0}
+.guide-definitions dd{margin:0;color:#536659}
+.guide-content code{font:12px/1.8 ui-monospace,SFMono-Regular,Consolas,monospace;color:#28563f;overflow-wrap:anywhere}
+.guide-example{margin:10px 0 16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#eef3ee;white-space:pre-wrap;overflow-wrap:anywhere}
+.guide-example code{font-size:13px}
+.guide-table{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:white}
+.guide-table th:first-child{width:39%}.guide-table th:last-child{width:61%}
+.guide-table td,.guide-table th{padding:10px 12px;font-size:12px}.guide-table td:first-child{font-weight:500}
+.guide-footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:20px}
+.guide-footer a{text-decoration:underline}
+@media(max-width:760px){.bottom-nav{gap:0;padding-left:4px;padding-right:4px}.bottom-nav a{flex:1;flex-direction:column;gap:4px;padding:8px 1px}.bottom-nav span{font-size:10px}}
+@media(max-width:480px){.weekday-options{gap:4px}.weekday-choice span{font-size:12px}.guide-content{font-size:13px}.guide-index{gap:6px 14px}.guide-table td,.guide-table th{padding:9px}.guide-table th:first-child{width:42%}.guide-table th:last-child{width:58%}}

@@ -182,7 +182,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
                     response = web.json_response({'error': '请先登录'}, status=401)
                 else:
                     from urllib.parse import quote
-                    target = str(request.rel_url) if request.path == '/' else '/'
+                    target = str(request.rel_url) if request.path in ('/', '/help') else '/'
                     raise web.HTTPFound('/login?next=' + quote(target, safe=''))
             else:
                 if authenticated:
@@ -345,11 +345,14 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def page(request):
         name = 'login.html' if request.path == '/login' else 'index.html'
-        return web.Response(text=(ROOT / name).read_text(encoding='utf-8'), content_type='text/html')
+        text = (ROOT / name).read_text(encoding='utf-8')
+        if name == 'index.html':
+            text = text.replace('<!-- USER_HELP -->', (ROOT / 'help.html').read_text(encoding='utf-8'))
+        return web.Response(text=text, content_type='text/html')
 
     async def static(request):
         name = request.match_info['name']
-        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'style.css', 'pwa.js', 'pwa-register.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'):
+        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'time.js', 'help.js', 'style.css', 'pwa.js', 'pwa-register.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'):
             raise web.HTTPNotFound()
         return web.Response(body=(ROOT / name).read_bytes(),
                             content_type='image/png' if name.endswith('.png') else 'text/css' if name.endswith('.css') else 'application/javascript')
@@ -548,7 +551,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
         return web.json_response({'ok': True})
 
     app.add_routes([web.get('/sw.js',pwa_asset),web.get('/manifest.webmanifest',pwa_asset),web.get('/offline',pwa_asset),web.get('/healthz', health), web.get('/login', page), web.get('/', page),
-        web.get('/admin', page), web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/static/{name}', static), web.post('/api/login', login),
+        web.get('/admin', page), web.get('/mail', page), web.get('/manage', page), web.get('/settings', page), web.get('/variables', page), web.get('/help', page), web.get('/static/{name}', static), web.post('/api/login', login),
         web.get('/api/auth/challenge',auth_challenge), web.get('/api/auth/options',auth_options),
         web.post('/api/auth/resume',auth_resume), web.post('/api/auth/forget',auth_forget),
         web.post('/api/logout', logout), web.get('/api/status', status), web.post('/api/check', check), web.put('/api/auto-query', automatic_query),

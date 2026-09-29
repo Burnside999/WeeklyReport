@@ -47,7 +47,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.setViewportSize({width:390,height:844});
     await page.unroute('**/api/status');
     await page.locator('#nav-mail').click();await page.getByText('还没有邮件模板',{exact:true}).waitFor();
-    assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表','管理']);
+    assert.deepEqual(await page.locator('.bottom-nav span').allTextContents(),['填写情况','监听管理','邮件模板','设置','变量表','帮助手册','管理']);
     await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
     for(let i=0;i<4;i++)await page.locator('#add-recipient').click();
     assert(await page.locator('#add-recipient').isDisabled());

@@ -29,7 +29,7 @@ async function login(auto=false) {
     password.value='';
     let next='/';
     try {const target=new URL(new URLSearchParams(location.search).get('next') || '/',location.origin);
-      if(target.origin===location.origin && ['/','/mail','/manage','/settings','/variables','/admin'].includes(target.pathname))next=target.pathname+target.search;
+      if(target.origin===location.origin && ['/','/mail','/manage','/settings','/variables','/help','/admin'].includes(target.pathname))next=target.pathname+target.search;
     } catch { /* Invalid destinations return to the home page. */ }
     location.replace(next);
   }catch(error){document.querySelector('#error').textContent=error.message;if(auto || !password.value){savedName='';automatic.checked=false;syncPassword();}}

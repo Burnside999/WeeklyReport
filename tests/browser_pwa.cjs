@@ -26,6 +26,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.goto(base+'/login');await page.locator('#username').fill('admin');await page.locator('#password').fill('browser-test-password');
     await page.locator('#login button').click();await page.waitForURL(u=>u.pathname==='/');
     await page.locator('#document-select').waitFor();const did=await page.locator('#document-select').inputValue();
+    await page.goto(base+'/settings?doc='+did);
     await page.waitForFunction(()=>!document.querySelector('#push-toggle').disabled);
     await page.locator('#push-toggle').click();
     await page.waitForFunction(()=>window.displayedNotifications.length===1);
@@ -49,7 +50,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('.rule-card').filter({hasText:'第二条主推送'}).locator('.primary-push-badge').waitFor();
     assert.equal(await page.locator('.primary-push-badge').count(),1);
     assert.deepEqual(await page.locator('.primary-push-badge').evaluate(el=>[el.parentElement.children[0].textContent,el.nextElementSibling.textContent]),['主推送','手动触发']);
-    const second=await context.newPage();await second.goto(base+'/?doc='+did);
+    const second=await context.newPage();await second.goto(base+'/settings?doc='+did);
     await second.locator('#push-state').filter({hasText:'保持页面打开'}).waitFor();
     const trigger=await context.request.post(base+'/api/templates/'+items[1].id+'/send',{headers:{'X-Requested-With':'WeeklyReport','X-Document-ID':did},data:{revision:items[1].revision}});
     assert(trigger.ok(),await trigger.text());
@@ -71,13 +72,14 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('.rule-card').filter({hasText:'第二条主推送'}).getByRole('button',{name:'取消主推送',exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('.primary-push-badge').length===0);
     await page.goto(base+'/?doc='+did);
+    await page.goto(base+'/settings?doc='+did);
     await page.waitForFunction(()=>!document.querySelector('#push-toggle').disabled);
     assert(!(await page.locator('#push-toggle').isChecked()));
     if(process.env.PWA_SCREENSHOT)await page.screenshot({path:process.env.PWA_SCREENSHOT,fullPage:true});
     // Ordinary iPhone tabs can opt into in-page reminders without pretending to have background push.
     const iphone=await browser.newContext({viewport:{width:390,height:844},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
     await iphone.addCookies(await context.cookies());const phone=await iphone.newPage();
-    await phone.goto(base+'/?doc='+did);
+    await phone.goto(base+'/settings?doc='+did);
     await phone.locator('#push-state').filter({hasText:'添加到主屏幕'}).waitFor();
     await phone.locator('#push-toggle').check();
     await phone.locator('#toast').filter({hasText:'消息推送启动成功！'}).waitFor();

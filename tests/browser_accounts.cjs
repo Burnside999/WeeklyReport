@@ -23,7 +23,7 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     for(const width of [320,390,768,1280]){await admin.setViewportSize({width,height:844});assert(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`admin overflow ${width}`);}
     const context=await browser.newContext({viewport:{width:390,height:844}}), alice=await context.newPage();alice.on('pageerror',e=>errors.push(String(e)));
     await login(alice,'alice');await alice.locator('#create-first-document').waitFor();
-    assert(await alice.locator('.bottom-nav').isHidden());assert(await alice.locator('#nav-admin').isHidden());
+    assert(await alice.locator('#nav-help').isVisible());assert(await alice.locator('#nav-admin').isHidden());
     await alice.locator('#create-first-document').click();await alice.locator('#document-dialog').waitFor();
     assert.equal(await alice.locator('#document-form [name=name]').inputValue(),'文档1');
     assert(await alice.locator('#document-credentials').isVisible());

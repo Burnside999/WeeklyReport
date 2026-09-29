@@ -3,7 +3,7 @@
   const workspace = await workspaceReady;
   if(!workspace?.document || page === 'admin')return;
   let allRules = [], checking = false, togglingAuto = false, refreshVersion = 0;
-function date(value) { return value ? new Date(value).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}) : '尚未查询'; }
+function date(value) { return formatDateTime(value, '尚未查询'); }
 function col(n) { let s=''; while(n) { n--; s=String.fromCharCode(65+n%26)+s; n=Math.floor(n/26); } return s; }
 async function refresh() {
   if(page !== 'home') return;
@@ -171,13 +171,13 @@ async function loadVariables() {
       name.append(el('code', row.name, 'variable-code'));
       if (row.value === null) value.append(el('span', 'null', 'muted'));
       else if (row.value === '') value.append(el('span', '空', 'muted'));
-      else value.textContent = typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value);
+      else value.textContent = row.type === 'datetime' ? formatDateTime(row.value) : typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value);
       tr.append(name, el('td', row.type), el('td', row.description), value);
       ['变量名', '类型', '描述', '值'].forEach((label, i) => tr.children[i].dataset.label = label);
       fragment.append(tr);
     }
     $('#variable-rows').replaceChildren(fragment);
-    $('#variables-state').textContent = `共 ${data.rows.length} 个变量 · 值更新于 ${data.generated_at.replace('T', ' ')}${data.query_running ? ' · 表格查询中' : ''}`;
+    $('#variables-state').textContent = `共 ${data.rows.length} 个变量 · 值更新于 ${formatDateTime(data.generated_at)}${data.query_running ? ' · 表格查询中' : ''}`;
   } catch (error) {
     $('#variables-state').textContent = '变量刷新失败，下方可能是旧值：' + error.message;
     toast(error.message);
