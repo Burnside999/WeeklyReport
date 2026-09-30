@@ -2,7 +2,7 @@ name: Windows installer
 on:
   push:
     branches: [develop]
-    paths: ['desktop/**', 'app/**', 'tests/desktop_smoke.cjs', '.github/workflows/windows.yml']
+    paths: ['desktop/**', 'app/release.json', 'app/release.py', 'scripts/release.py', 'tests/browser_server.py', 'tests/desktop_smoke.cjs', '.github/workflows/windows.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
+      - run: python scripts/release.py --check
       - run: npm ci
         working-directory: desktop
       - run: npm test

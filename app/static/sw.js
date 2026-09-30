@@ -1,7 +1,7 @@
 'use strict';
-const CACHE = 'weeklyreport-public-v2';
+const CACHE = 'weeklyreport-public-{{APP_VERSION}}-v3';
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(['/offline','/static/style.css','/static/icon-192.png'])).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(['/offline','/static/style.css','/static/icon-192.png','/static/version.js'])).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('weeklyreport-public-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
@@ -12,7 +12,7 @@ self.addEventListener('fetch', event => {
   if(event.request.mode === 'navigate') {
     // Network only for every authenticated page. Cache contains no account data.
     event.respondWith(fetch(event.request).catch(async () => (await caches.match('/offline')) || Response.error()));
-  } else if(['/static/style.css','/static/icon-192.png'].includes(url.pathname)) {
+  } else if(['/static/style.css','/static/icon-192.png','/static/version.js'].includes(url.pathname)) {
     event.respondWith(fetch(event.request).catch(async () => (await caches.match(url.pathname)) || Response.error()));
   }
 });

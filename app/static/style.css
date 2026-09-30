@@ -132,76 +132,15 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 #automatic-fields #schedule-preview{margin:6px 0;color:#a13c35}
 #schedule-fixed{font-variant-numeric:tabular-nums;font-size:14px}
 
-/* Readable guide: clear entry points, larger text, and optional detail. */
-#help .page-heading{margin-bottom:20px}
-#help h1{font-size:32px}
-.help-author{margin:10px 0 0;font-size:13px;color:#63736b}
-.help-author a{font-weight:600;text-decoration:underline;text-underline-offset:3px}
-#help .intro{font-size:16px;line-height:1.7;margin:0 0 24px;color:#43584d}
-.guide-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:26px}
-.guide-shortcuts>a{display:flex;flex-direction:column;gap:10px;padding:18px 16px;background:#e6efe7;border:1px solid #d0dfd2;border-radius:14px}
-.guide-shortcuts>a:nth-child(2){background:#eaf0fa;border-color:#d4dfef;color:#31577f}
-.guide-shortcuts>a:nth-child(3){background:#fbf0dc;border-color:#eedebd;color:#77531e}
-.guide-shortcuts strong{font-size:16px;display:flex;justify-content:space-between;gap:8px}
-.guide-shortcuts>a>span{font-size:13px;line-height:1.5;color:#4e6258}
-.guide-search{margin:0;font-size:14px}.guide-search input{background:white}
-.guide-index{display:flex;flex-wrap:wrap;gap:4px 16px;margin:14px 0 24px}
-.guide-index a{font-size:14px;padding:6px 0;text-decoration:underline;text-underline-offset:4px}
-.guide-section{border-top:1px solid #d8e2d9;scroll-margin-top:16px}
-.guide-section>summary{padding:22px 0;min-height:68px;font-size:18px;line-height:1.5;color:#243e31}
-.guide-section[open]>summary{padding-bottom:20px;border:0}
-.guide-section .guide-number{margin:0 6px 0 0;font:13px/1.5 ui-monospace,monospace;color:#657a6d}
-.guide-content{padding:0 0 26px;font-size:16px;line-height:1.85;color:#354b40;overflow-wrap:anywhere}
-.guide-content p{margin:14px 0}.guide-content p:first-child{margin-top:0}
-.guide-content h2{font-size:17px;margin:24px 0 10px;color:#24567f}
-.guide-content h2:first-child{margin-top:0}
-.guide-content ol,.guide-content ul{padding-left:23px;margin:0}
-.guide-content li+li{margin-top:12px}.guide-content li::marker{color:#17664c;font-weight:700}
-.guide-content a{text-decoration:underline;text-underline-offset:3px}
-.guide-definitions{margin:0}
-.guide-definitions dt{font-weight:700;margin:22px 0 6px;color:#254f73}
-.guide-definitions dt:first-child{margin-top:0}
-.guide-definitions dd{margin:0}
-.guide-content code{font:13px/1.8 ui-monospace,SFMono-Regular,Consolas,monospace;color:#28563f;overflow-wrap:anywhere}
-.guide-example{margin:12px 0 20px;padding:18px;border-left:3px solid #549381;border-radius:0 10px 10px 0;background:#eaf0ed;white-space:pre-wrap;overflow-wrap:anywhere}
-.guide-example code{font-size:14px}
-.guide-table{margin:18px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:white}
-.guide-table th:first-child{width:42%}.guide-table th:last-child{width:58%}
-.guide-table td,.guide-table th{padding:12px;font-size:14px}.guide-table th{background:#eaf0ed;color:#43594b}.guide-table td:first-child{font-weight:500}
-.guide-install-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.guide-install-card{padding:20px;background:#fff;border:1px solid #dce5dd;border-radius:14px}
-.guide-install-card .guide-platform{font-size:12px;font-weight:700;letter-spacing:2px;color:#607b6a;margin:0 0 5px}
-.guide-install-card h2{font-size:23px;color:#214e3b;margin:0}
-.guide-install-card .guide-caption{font-size:13px;margin:6px 0 20px;color:#64746b}
-.guide-install-card ol{font-size:15px}
-.guide-content .guide-note{padding:14px 16px;margin:18px 0 0;border-left:3px solid #d3aa4e;border-radius:0 8px 8px 0;background:#fbf2df;font-size:14px;line-height:1.8;color:#6b5229}
-.guide-support{font-size:14px;color:#714d26;background:#f4ecdf;padding:12px 16px;border-radius:8px}
-.guide-extra{margin-top:18px}.guide-extra>summary{font-size:14px;color:#496351}.guide-extra p{font-size:14px}
-.guide-tour-start{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:24px 0 0;padding:24px;background:#e5eee8;border-radius:14px}
-.guide-tour-start h2{font-size:18px}.guide-tour-start p{font-size:14px;line-height:1.7;margin:8px 0 0;color:#52675b}.guide-tour-start button{flex-shrink:0}
 @media(max-width:760px){.bottom-nav{gap:0;padding-left:4px;padding-right:4px}.bottom-nav a{flex:1;flex-direction:column;gap:4px;padding:8px 1px}.bottom-nav span{font-size:10px}}
-@media(max-width:600px){.guide-install-grid{grid-template-columns:1fr}.guide-shortcuts{gap:8px}.guide-shortcuts>a{padding:14px 10px}.guide-shortcuts strong{font-size:14px}.guide-shortcuts>a>span{font-size:12px}.guide-tour-start{align-items:stretch;flex-direction:column;gap:16px}.guide-install-card{padding:20px}}
-@media(max-width:480px){.weekday-options{gap:4px}.weekday-choice span{font-size:12px}.guide-content{font-size:15px}.guide-section>summary{font-size:17px;gap:8px}.guide-number{flex-shrink:0}.guide-index{gap:4px 14px}.guide-table td,.guide-table th{padding:10px;font-size:14px}.guide-table code{font-size:12px}.guide-shortcuts strong>span{display:none}}
-
+@media(max-width:480px){.weekday-options{gap:4px}.weekday-choice span{font-size:12px}}
 .context-links{font-size:13px;line-height:1.7;margin:14px 0}.context-links a{text-decoration:underline;text-underline-offset:3px}
 .apple-guide-icon{display:inline-block;object-fit:contain;vertical-align:middle;margin:0 3px}
-.label-heading{display:inline-flex;align-items:center;gap:6px;max-width:100%;text-align:left}
-.tip-trigger{display:inline-grid;place-items:center;flex:0 0 24px;width:24px;height:24px;min-height:24px;padding:0;margin:0;border:1px solid #bacdc0;border-radius:50%;background:#f2f7f3;color:#416653;font:600 13px/1 system-ui;vertical-align:middle}
-.tip-trigger:hover,.tip-trigger[aria-expanded=true]{background:#dceee2;color:#174e36;border-color:#71a383}.tip-action{display:flex;align-items:center;gap:8px}.tip-action>button:first-child{flex:1}
-.field-tooltip{position:fixed;z-index:1000;padding:13px 16px;background:#203d30;color:#fff;border:1px solid #6b8d78;border-radius:12px;font-size:14px;line-height:1.8;box-shadow:0 6px 24px #172f2630;overflow-wrap:anywhere;font-weight:400;text-align:left}
-
-/* The tutorial remains in one dialog; a clipped preview owns the spotlight. */
-#tour-dialog{position:fixed;inset:0;width:min(1140px,calc(100vw - 32px));height:min(780px,calc(100dvh - 32px));max-width:none;max-height:none;margin:auto;padding:20px;border-radius:20px;background:#f4f7f4;overflow:hidden;display:flex;flex-direction:column;animation:none}
-#tour-dialog:not([open]){display:none}#tour-dialog::backdrop{background:#142a24c9;animation:none}
-.tour-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}.tour-progress{font-size:15px;font-weight:700;color:#315e48}.tour-close{font-size:14px;padding:8px 12px}
-.tour-demo-caption{font-size:12px;color:#61756a;margin:0 0 16px;flex-shrink:0}
-.tour-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr);gap:24px;min-height:0;flex:1}
-.tour-preview{position:relative;overflow:hidden;border:1px solid #d3e0d5;border-radius:14px;min-height:0;background:#f5f7f4}
-.tour-scroller{height:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}.tour-scene{padding:26px 24px 80px;pointer-events:none;min-height:100%}.tour-scene *{animation:none!important;transition:none!important}.tour-scene h2.tour-page-title{font-size:20px;margin:0 0 24px;color:#315542}
-.tour-scene textarea{width:100%;padding:12px;border:1px solid #dce4dc;border-radius:9px;font:inherit;font-size:15px;line-height:1.6;background:white;resize:none}.tour-scene input,.tour-scene select{font-size:15px}.tour-scene .panel{padding:18px}.tour-scene .context-links{display:none}
-.tour-spot{position:absolute;z-index:1;border:3px solid #b6efd0;border-radius:12px;box-shadow:0 0 0 150vmax #142a248c;pointer-events:none;will-change:top,left,width,height}
-.tour-card{min-width:0;overflow:auto;overscroll-behavior:contain;padding:6px 6px 12px 0;scrollbar-width:thin}
-.tour-card h2{font-size:24px;line-height:1.45;margin:0 0 22px;color:#1d4d38}.tour-card p{font-size:17px;line-height:1.9;margin:0 0 20px;overflow-wrap:anywhere}.tour-card .tour-note{font-size:15px;background:#eef1e2;border-left:3px solid #ad9e4a;padding:14px 16px;border-radius:0 9px 9px 0;color:#5e542e}.tour-link{display:inline-block;margin:0 0 12px;font-size:14px;text-decoration:underline;text-underline-offset:3px}.tour-card label{font-size:13px;margin:14px 0}.tour-jump{background:white;font-size:14px;margin-top:6px}.tour-actions{display:flex;justify-content:space-between;gap:12px;margin-top:20px}.tour-actions button{min-width:100px}
-.tour-demo-note{border:1px solid #cbdcd0;border-radius:12px;padding:20px;line-height:1.9;background:#fff;margin-bottom:20px}.tour-demo-variable{padding:14px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.tour-demo-variable code{font-size:14px}.tour-demo-variable p{font-size:14px;margin:6px 0}
-@media(max-width:720px){#tour-dialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);padding:12px;border-radius:16px}.tour-layout{grid-template-columns:1fr;grid-template-rows:minmax(170px,.85fr) minmax(0,1.15fr);gap:14px}.tour-demo-caption{margin-bottom:10px;font-size:11px}.tour-scene{padding:16px 14px 50px}.tour-scene h2.tour-page-title{font-size:16px;margin-bottom:16px}.tour-card{padding:0 4px 4px}.tour-card h2{font-size:20px;margin:0 0 12px}.tour-card p{font-size:15px;line-height:1.8;margin-bottom:12px}.tour-card .tour-note{font-size:14px;padding:10px 12px}.tour-card label{margin:8px 0}.tour-actions{margin-top:12px;position:sticky;bottom:0;background:#f4f7f4;padding-top:8px}.tour-progress{font-size:14px}}
-@media(max-height:500px) and (min-width:721px){#tour-dialog{padding:12px}.tour-demo-caption{margin-bottom:6px}.tour-layout{gap:16px}}
+.label-heading{display:inline-flex;align-items:center;gap:5px;max-width:100%;text-align:left}
+.tip-trigger{display:inline-grid;place-items:center;flex:0 0 18px;width:18px;height:18px;min-height:18px;padding:0;margin:0;border:1px solid #b7c3ba;border-radius:50%;background:transparent;color:#6b7d70;font:500 11px/1 system-ui;vertical-align:middle;transition:none}
+.tip-trigger:hover,.tip-trigger[aria-expanded=true]{color:#28513b;border-color:#71967f;background:#edf3ee}
+.tip-trigger:focus-visible{outline:2px solid #83b49a;outline-offset:2px}
+.field-tooltip{position:fixed;z-index:1000;padding:8px 10px;background:#263d30;color:#fff;border-radius:6px;font-size:12px;line-height:1.6;box-shadow:0 3px 10px #172f2620;overflow-wrap:anywhere;font-weight:400;text-align:left;pointer-events:none;animation:none;transition:none}
+@media(pointer:coarse){.tip-trigger{flex-basis:28px;width:28px;height:28px;min-height:28px;font-size:12px}}
+.app-version{display:block;margin:32px 0 0;color:#728076;font-size:11px;line-height:1.6;font-weight:400;text-align:center;overflow-wrap:anywhere;user-select:text}
+.login-box .app-version{margin-top:28px}

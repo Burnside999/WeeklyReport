@@ -6,7 +6,7 @@ import re
 import secrets
 import sqlite3
 
-from .core import DEFAULTS, doc_id, now
+from .core import DEFAULTS, doc_id
 
 CREDENTIAL_KEYS = ('client_id', 'open_id', 'access_token')
 SMTP_KEYS = tuple(k for k in DEFAULTS if k.startswith('smtp_'))

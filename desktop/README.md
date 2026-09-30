@@ -4,7 +4,7 @@
 
 ## 安装与使用
 
-1. 只从 [Release 页面](https://github.com/Burnside999/WeeklyReport/releases)下载并运行 `WeeklyReport-Setup-1.0.2-x64.exe`，选择安装目录。安装器创建桌面和开始菜单快捷方式。
+1. 只从 [Release 页面](https://github.com/Burnside999/WeeklyReport/releases)下载并运行 `WeeklyReport-Setup-1.0.0-x64.exe`，选择安装目录。安装器创建桌面和开始菜单快捷方式。
 2. 打开“周报填写检查”，首次启动自动连接 `https://wrret.images.city`，失败后才显示地址输入框（可修改为自己的 HTTPS 域名；已有配置继续使用原地址）。网站须部署本次 `develop` 的服务端与前端更新。
 3. 使用原有帐号登录。若希望重启应用、会话过期后继续接收通知，勾选登录页的“自动登录”。客户端不额外保存帐号密码。
 4. 在“设置 → 合并单元格结构”下方打开“允许通知”。成功后本机显示“消息推送启动成功！”。重复刷新不会再发；关闭后重新开启会再发一次。
@@ -29,6 +29,8 @@
 
 ## 构建
 
+版本以 `app/release.json` 为准。改号后先在仓库根目录运行 `python scripts/release.py`，同步客户端 package 与 lock 文件。CI 会检查是否一致。
+
 在 Windows 安装 Node.js 22 后：
 
 ```powershell
@@ -38,7 +40,7 @@ npm test
 npm run dist:win
 ```
 
-安装程序位于 `desktop/dist/`。`Windows installer` GitHub Actions 工作流在 develop 的客户端/应用修改后构建、静默安装、验证开始菜单快捷方式，并运行已安装程序的登录、托盘后台通知与退出帐号测试。产物 `WeeklyReport-Windows-x64` 包含 EXE、SHA256 校验文件和验证截图，有效期 30 天。可通过 Actions → Windows installer → Run workflow 重新构建。
+安装程序位于 `desktop/dist/`。`Windows installer` GitHub Actions 工作流在 develop 的客户端、版本清单或构建验证文件修改后构建、静默安装、验证开始菜单快捷方式，并运行已安装程序的登录、托盘后台通知与退出帐号测试。产物 `WeeklyReport-Windows-x64` 包含 EXE、SHA256 校验文件和验证截图，有效期 30 天。可通过 Actions → Windows installer → Run workflow 重新构建。
 
 当前安装包未做付费代码签名，Windows 可能显示“未知发布者”或 SmartScreen 提示。通知需允许 Windows 设置中的应用通知；专注模式可影响横幅显示。自动化验证模拟了操作系统通知显示，真实通知中心、锁屏和专注模式需在使用者电脑验证。
 

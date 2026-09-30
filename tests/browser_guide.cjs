@@ -119,10 +119,17 @@ const server = spawn('python',['tests/browser_server.py'],{env:{...process.env,P
     }
     await page.locator('#connection-settings > summary').click();
     const tip=page.locator('#settings-form').getByRole('button',{name:'Access Token说明',exact:true});
-    await tip.hover();await page.locator('#field-tooltip').filter({hasText:'清空后保存'}).waitFor();
-    await page.keyboard.press('Escape');assert(await page.locator('#field-tooltip').isHidden());
-    await tip.focus();await page.locator('#field-tooltip').waitFor();
-    await tip.click();await page.locator('#field-tooltip').waitFor();await tip.click();assert(await page.locator('#field-tooltip').isHidden());
+    const bubble = page.locator('#field-tooltip');
+    assert.equal(await tip.evaluate(el=>el.getBoundingClientRect().width),18);
+    await tip.dispatchEvent('pointerenter',{pointerType:'mouse'});
+    await tip.dispatchEvent('pointerleave',{pointerType:'mouse'});
+    await page.waitForTimeout(350);assert(await bubble.isHidden(),'passing over a hint does not open it later');
+    await tip.hover();await bubble.filter({hasText:'清空后保存'}).waitFor();
+    assert(await bubble.evaluate(el=>el.getBoundingClientRect().width<=240));
+    await page.mouse.move(0,0);assert(await bubble.isHidden(),'mouse leave closes immediately');
+    await tip.focus();await bubble.waitFor();
+    await page.keyboard.press('Escape');assert(await bubble.isHidden());
+    await tip.click();await bubble.waitFor();await tip.click();assert(await bubble.isHidden());
     assert.equal(await page.locator('#settings-form [name=access_token]').getAttribute('type'),'password');
     assert.equal(await page.locator('#settings-form [name=access_token]').getAttribute('autocomplete'),'off');
     for(const width of [320,390,1280]) {

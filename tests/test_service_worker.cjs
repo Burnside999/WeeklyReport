@@ -13,7 +13,7 @@ const context={self,URL,Response,caches:{open:async()=>({addAll:async urls=>cach
 vm.runInNewContext(fs.readFileSync('app/static/sw.js','utf8'),context);
 async function event(name,data={}){let promise;listeners[name]({...data,waitUntil:p=>promise=p});await promise;}
 (async()=>{
-  await event('install');assert.deepEqual(cached,['/offline','/static/style.css','/static/icon-192.png']);
+  await event('install');assert.deepEqual(cached,['/offline','/static/style.css','/static/icon-192.png','/static/version.js']);
   await event('push',{data:{json:()=>({id:42,body:'本周还有 5 人未填写',url:'/?doc=abc'})}});
   assert.equal(notifications[0][1].body,'本周还有 5 人未填写');assert.equal(notifications[0][1].tag,'weeklyreport-42');
   await event('push',{data:{json:()=>({id:42,body:'本周还有 5 人未填写'})}});

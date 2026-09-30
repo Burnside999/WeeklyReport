@@ -1,14 +1,14 @@
 """Document runtimes and account/document management endpoints."""
 import asyncio
+import re
 from types import SimpleNamespace
 from aiohttp import web
-from .accounts import (Accounts, DocumentStore, CREDENTIAL_KEYS, SMTP_KEYS,
+from .accounts import (DocumentStore, CREDENTIAL_KEYS, SMTP_KEYS,
                        credentials, document_name, password_hash)
 from .core import DEFAULTS, doc_id, integer, migrate_variables, migrate_roster
 from .mail import email_address
 from .templates import MailEngine
 from .tencent import TencentClient
-import re
 
 
 def invalidate(store, message):

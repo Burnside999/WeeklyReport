@@ -11,3 +11,9 @@ if (process.isMainFrame) contextBridge.exposeInMainWorld('weeklyReportDesktop', 
     return () => ipcRenderer.removeListener('notifications:changed', listener);
   }
 });
+
+// Version handshake shared with future native shells; no Node access is exposed.
+if (process.isMainFrame) contextBridge.exposeInMainWorld('weeklyReportClient', {
+  protocolVersion: 1,
+  getInfo: () => ipcRenderer.invoke('client:info')
+});

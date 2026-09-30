@@ -171,6 +171,10 @@ function settingsSender(event) {
 function requireRemote(event) {
   if (!trustedSender(event, window, origin)) throw new Error('不允许的请求来源');
 }
+function clientInfo() {
+  return { id: 'windows', name: 'Windows', version: app.getVersion() };
+}
+ipcMain.handle('client:info', event => { requireRemote(event); return clientInfo(); });
 ipcMain.handle('notifications:state', async (event, uid) => { requireRemote(event); return client.bind(uid); });
 ipcMain.handle('notifications:toggle', async (event, uid, enabled) => {
   requireRemote(event);
@@ -181,7 +185,7 @@ ipcMain.handle('notifications:toggle', async (event, uid, enabled) => {
 ipcMain.handle('notifications:stop', event => { requireRemote(event); closeNotifications(); return client.disable(); });
 ipcMain.handle('settings:read', event => {
   if (!settingsSender(event)) throw new Error('不允许的请求来源');
-  return { server: config.server || DEFAULT_SERVER, error: settingsError };
+  return { server: config.server || DEFAULT_SERVER, error: settingsError, client: clientInfo() };
 });
 ipcMain.handle('settings:save', (event, value) => {
   if (!settingsSender(event)) throw new Error('不允许的请求来源');

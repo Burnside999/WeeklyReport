@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(__dirname,'../main.cjs'),'utf8');
 const settle = () => new Promise(resolve=>setImmediate(resolve));
 async function launch(saved = {}) {
   const windows=[], deadlines=[], writes=[], prompts=[], handlers={};
-  const app = Object.assign(new EventEmitter(),{setAppUserModelId(){},requestSingleInstanceLock:()=>true,whenReady:()=>Promise.resolve(),getPath:()=>'/tmp/test-data',quit(){this.emit('before-quit');}});
+  const app = Object.assign(new EventEmitter(),{setAppUserModelId(){},requestSingleInstanceLock:()=>true,whenReady:()=>Promise.resolve(),getPath:()=>'/tmp/test-data',getVersion:()=> '1.0.0',quit(){this.emit('before-quit');}});
   class Window extends EventEmitter {
     constructor() { super(); this.visible=false; this.webContents=Object.assign(new EventEmitter(),{setWindowOpenHandler(){},getURL:()=>this.url,send(){}}); windows.push(this); }
     removeMenu(){} isDestroyed(){return !!this.destroyed;} destroy(){this.destroyed=true;this.emit('closed');}
@@ -31,7 +31,7 @@ async function launch(saved = {}) {
   },__dirname:path.resolve(__dirname,'..'),process:{platform:'win32'},URL,AbortSignal,
     setTimeout(fn,ms){const token={fn,ms};deadlines.push(token);return token;},clearTimeout(token){if(token)token.cleared=true;},setInterval(){},clearInterval(){}});
   await settle();
-  return {windows,deadlines,writes,prompts,app};
+  return {windows,deadlines,writes,prompts,app,handlers};
 }
 test('clean install tries the default directly and shows the page on success',async()=>{
   const env=await launch();assert.equal(env.windows.length,1);assert.equal(env.windows[0].url,'https://wrret.images.city/');
@@ -54,4 +54,14 @@ test('closing explains tray exit and hides; explicit quit does not intercept clo
   let prevented=false;window.emit('close',{preventDefault(){prevented=true;}});await settle();
   assert(prevented);assert(!window.visible);assert.match(env.prompts[0].detail,/右键.*退出/);
   env.app.quit();window.emit('close',{preventDefault(){assert.fail('explicit quit must be allowed');}});assert.equal(env.prompts.length,1);
+});
+
+test('installed version is returned only to the configured main frame', async () => {
+  const env=await launch(), contents=env.windows[0].webContents;
+  contents.mainFrame={url:'https://wrret.images.city/'};
+  const info=env.handlers['client:info']({sender:contents,senderFrame:contents.mainFrame});
+  assert.equal(info.id,'windows');assert.equal(info.version,'1.0.0');
+  assert.throws(()=>env.handlers['client:info']({sender:contents,senderFrame:{url:'https://wrret.images.city/'}}));
+  contents.mainFrame.url='https://evil.example/';
+  assert.throws(()=>env.handlers['client:info']({sender:contents,senderFrame:contents.mainFrame}));
 });
