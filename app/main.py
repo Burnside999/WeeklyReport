@@ -352,7 +352,7 @@ def create_app(data_dir=None, password=None, start_scheduler=True):
 
     async def static(request):
         name = request.match_info['name']
-        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'time.js', 'help.js', 'tour.js', 'style.css', 'pwa.js', 'pwa-register.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'):
+        if name not in ('app.js', 'mail.js', 'login.js', 'crypto.js', 'workspace.js', 'admin.js', 'time.js', 'help.js', 'tour.js', 'tips.js', 'style.css', 'apple-safari.png', 'apple-share.png', 'pwa.js', 'pwa-register.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'):
             raise web.HTTPNotFound()
         return web.Response(body=(ROOT / name).read_bytes(),
                             content_type='image/png' if name.endswith('.png') else 'text/css' if name.endswith('.css') else 'application/javascript')

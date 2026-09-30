@@ -27,3 +27,9 @@ test('only documented HTTPS help links open externally', () => {
   for (const url of ['https://github.com/Burnside999','https://github.com/Burnside999/WeeklyReport/actions/workflows/windows.yml','https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/ios']) assert.equal(externalLink(url),true,url);
   for (const url of ['file:///etc/passwd','javascript:alert(1)','https://github.com.evil.test/Burnside999','https://github.com/Burnside999/Other','https://github.com/Burnside999/WeeklyReport-evil','https://user@github.com/Burnside999','https://github.com:444/Burnside999','http://github.com/Burnside999']) assert.equal(externalLink(url),false,url);
 });
+
+test('onboarding links allow only the documented Tencent and Apple origins and paths', () => {
+  const {externalLink} = require('../security.cjs');
+  for(const url of ['https://docs.qq.com/','https://docs.qq.com/open/developers/','https://docs.qq.com/open/document/app/oauth2/','https://support.apple.com/zh-cn/guide/iphone/iph42ab2f3a7/18.0/ios/18.0'])assert.equal(externalLink(url),true,url);
+  for(const url of ['https://docs.qq.com.evil.test/open/developers/','https://docs.qq.com/open/../../login','https://user@docs.qq.com/open/','http://docs.qq.com/open/','https://docs.qq.com:444/open/','https://support.apple.com/not-the-guide'])assert.equal(externalLink(url),false,url);
+});

@@ -38,35 +38,52 @@ const server = spawn('python',['tests/browser_server.py'],{env:{...process.env,P
         await page.screenshot({path:shots+`/help-${width}.png`,fullPage:true});
       }
     }
-    // The tour crosses real pages without changing settings or sending messages.
+    assert.equal(await page.locator('#help a[href*="/actions/"]').count(),0);
+    assert((await page.locator('#help a[href="https://github.com/Burnside999/WeeklyReport/releases"]').count())>=1);
+    assert.equal(await page.locator('#help').getByText('作为网页 App 打开',{exact:false}).count(),0);
+    assert(await page.locator('.apple-guide-icon').evaluateAll(items=>items.every(el=>el.complete&&el.naturalWidth>0)));
+    await page.locator('.guide-index a[href="#guide-credentials"]').click();
+    assert(await page.locator('#guide-credentials').evaluate(el=>el.open));
+    assert(await page.locator('#guide-credentials').getByRole('link',{name:'腾讯文档开放平台 ↗',exact:true}).count());
+    // All 20 steps work without a document, network writes or cross-page reloads.
+    const mutations=[];page.on('request',request=>{if(request.url().includes('/api/')&&!['GET','HEAD'].includes(request.method()))mutations.push(request.url());});
+    const tutorialURL=page.url();
     for (const width of [320,390,1280]) {
       await page.setViewportSize({width,height:740});
+      await page.emulateMedia({reducedMotion:'no-preference'});
       await page.locator('#start-tour').click();
-      for (let i=0;i<8;i++) {
-        await page.locator('.tour-progress').filter({hasText:`${i+1} / 8`}).waitFor();
+      for (let i=0;i<20;i++) {
+        await page.locator('.tour-progress').filter({hasText:`${i+1} / 20 ·`}).waitFor();
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
         const geometry = await page.locator('.tour-card').evaluate(el=>{
           const r=el.getBoundingClientRect(), s=document.querySelector('.tour-spot').getBoundingClientRect();
+          const t=document.querySelector('[data-tour-target]').getBoundingClientRect(),p=document.querySelector('.tour-preview').getBoundingClientRect();
           return {inside:r.left>=0 && r.top>=0 && r.right<=innerWidth+1 && r.bottom<=innerHeight+1,
-            overlap:Math.max(0,Math.min(r.right,s.right)-Math.max(r.left,s.left))*Math.max(0,Math.min(r.bottom,s.bottom)-Math.max(r.top,s.top))};
+            overlap:Math.max(0,Math.min(r.right,s.right)-Math.max(r.left,s.left))*Math.max(0,Math.min(r.bottom,s.bottom)-Math.max(r.top,s.top)),
+            aligned:Math.abs(s.left-Math.max(p.left,t.left-5))<2 && Math.abs(s.top-Math.max(p.top,t.top-5))<2,
+            visible:s.height>20 && s.width>20};
         });
         assert(geometry.inside,`tour card inside ${width} step ${i}`);
         assert.equal(geometry.overlap,0,`tour target remains visible ${width} step ${i}`);
-        assert.equal(new URL(page.url()).searchParams.get('doc'),did);
+        assert(geometry.aligned&&geometry.visible,`spotlight aligned ${width} step ${i}`);
+        assert.equal(page.url(),tutorialURL,'tutorial never reloads or navigates the live page');
         if(i===1) {
-          await page.reload(); await page.locator('.tour-progress').filter({hasText:'2 / 8'}).waitFor();
           await page.getByRole('button',{name:'上一步',exact:true}).click();
-          await page.locator('.tour-progress').filter({hasText:'1 / 8'}).waitFor();
+          await page.locator('.tour-progress').filter({hasText:'1 / 20 ·'}).waitFor();
           await page.getByRole('button',{name:'下一步',exact:true}).click();
-          await page.locator('.tour-progress').filter({hasText:'2 / 8'}).waitFor();
         }
-        if(shots && i===5 && width!==320)await page.screenshot({path:shots+`/tour-${width}.png`});
-        await page.getByRole('button',{name:i===7?'完成引导':'下一步',exact:true}).click();
+        if(shots && [5,16,19].includes(i) && width!==320)await page.screenshot({path:shots+`/tour-${width}-${i+1}.png`});
+        await page.getByRole('button',{name:i===19?'完成引导':'下一步',exact:true}).click();
       }
       await page.locator('#tour-dialog').waitFor({state:'detached'});
       await page.locator('#start-tour').click();await page.locator('#tour-dialog').waitFor();
+      await page.getByLabel('跳转教程步骤').selectOption('16');await page.locator('.tour-progress').filter({hasText:'17 / 20 ·'}).waitFor();
+      await page.keyboard.press('Tab');assert(await page.evaluate(()=>!!document.activeElement.closest('#tour-dialog')));
       await page.keyboard.press('Escape');await page.locator('#tour-dialog').waitFor({state:'detached'});
-      await page.reload();assert.equal(await page.locator('#tour-dialog').count(),0);
+      assert(await page.locator('#start-tour').evaluate(el=>document.activeElement===el));
     }
+    assert.deepEqual(mutations,[],'viewing a tutorial must not save configuration or send mail');
+    await page.emulateMedia({reducedMotion:'reduce'});
     await page.locator('#help-search').fill('不存在的测试词');
     await page.locator('#help-search-state').filter({hasText:'没有找到'}).waitFor();
     assert.equal(await page.locator('.guide-section:visible').count(),0);
@@ -100,6 +117,20 @@ const server = spawn('python',['tests/browser_server.py'],{env:{...process.env,P
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`settings overflow ${width}`);
       if(shots && width!==320)await page.screenshot({path:shots+`/settings-${width}.png`,fullPage:true});
     }
+    await page.locator('#connection-settings > summary').click();
+    const tip=page.locator('#settings-form').getByRole('button',{name:'Access Token说明',exact:true});
+    await tip.hover();await page.locator('#field-tooltip').filter({hasText:'清空后保存'}).waitFor();
+    await page.keyboard.press('Escape');assert(await page.locator('#field-tooltip').isHidden());
+    await tip.focus();await page.locator('#field-tooltip').waitFor();
+    await tip.click();await page.locator('#field-tooltip').waitFor();await tip.click();assert(await page.locator('#field-tooltip').isHidden());
+    assert.equal(await page.locator('#settings-form [name=access_token]').getAttribute('type'),'password');
+    assert.equal(await page.locator('#settings-form [name=access_token]').getAttribute('autocomplete'),'off');
+    for(const width of [320,390,1280]) {
+      await page.setViewportSize({width,height:740});await tip.click();await page.locator('#field-tooltip').waitFor();
+      assert(await page.locator('#field-tooltip').evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}));
+      if(shots&&width===390)await page.screenshot({path:shots+'/tooltip-390.png'});
+      await page.keyboard.press('Escape');
+    }
     await page.locator('#nav-mail').click();await page.locator('#add-template').click();
     await page.locator('#mail-recipients input').fill('test@example.com');
     await page.locator('#mail-subject').fill('时间格式测试');await page.locator('#mail-body').fill('正文');
@@ -130,8 +161,8 @@ const server = spawn('python',['tests/browser_server.py'],{env:{...process.env,P
     await reader.locator('#help').waitFor();assert(await reader.locator('#no-documents').isHidden());assert(await reader.locator('#nav-admin').isHidden());
     assert.deepEqual(await reader.locator('.bottom-nav a:visible span').allTextContents(),['帮助手册']);
     await reader.emulateMedia({reducedMotion:'reduce'});
-    await reader.locator('#start-tour').click();await reader.locator('.tour-progress').filter({hasText:'1 / 2'}).waitFor();
-    await reader.getByRole('button',{name:'下一步',exact:true}).click();await reader.locator('.tour-progress').filter({hasText:'2 / 2'}).waitFor();
+    await reader.locator('#start-tour').click();await reader.locator('.tour-progress').filter({hasText:'1 / 20 ·'}).waitFor();
+    await reader.getByRole('button',{name:'下一步',exact:true}).click();await reader.locator('.tour-progress').filter({hasText:'2 / 20 ·'}).waitFor();
     await reader.getByRole('button',{name:'退出引导',exact:true}).click();assert.equal(await reader.locator('#tour-dialog').count(),0);
     await reader.close();assert.deepEqual(errors,[]);
     console.log('Guide navigation/search, no-document access, responsive weekdays, settings switch and Beijing timestamps passed');

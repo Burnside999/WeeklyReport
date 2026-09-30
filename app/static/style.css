@@ -182,12 +182,26 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 @media(max-width:760px){.bottom-nav{gap:0;padding-left:4px;padding-right:4px}.bottom-nav a{flex:1;flex-direction:column;gap:4px;padding:8px 1px}.bottom-nav span{font-size:10px}}
 @media(max-width:600px){.guide-install-grid{grid-template-columns:1fr}.guide-shortcuts{gap:8px}.guide-shortcuts>a{padding:14px 10px}.guide-shortcuts strong{font-size:14px}.guide-shortcuts>a>span{font-size:12px}.guide-tour-start{align-items:stretch;flex-direction:column;gap:16px}.guide-install-card{padding:20px}}
 @media(max-width:480px){.weekday-options{gap:4px}.weekday-choice span{font-size:12px}.guide-content{font-size:15px}.guide-section>summary{font-size:17px;gap:8px}.guide-number{flex-shrink:0}.guide-index{gap:4px 14px}.guide-table td,.guide-table th{padding:10px;font-size:14px}.guide-table code{font-size:12px}.guide-shortcuts strong>span{display:none}}
-/* Modal tutorial keeps live controls visible but prevents accidental changes. */
-#tour-dialog{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;overflow:hidden;animation:none}
-#tour-dialog::backdrop{background:transparent;animation:none}
-.tour-spot{position:fixed;border:3px solid #a7e4c5;border-radius:12px;box-shadow:0 0 0 150vmax #142a24b8;pointer-events:none}
-.tour-card{position:fixed;width:min(380px,calc(100vw - 24px));padding:22px;background:#fff;border:1px solid #cadbd0;border-radius:16px;box-shadow:0 12px 40px #0b211c40;color:#243e31;max-height:calc(100dvh - 24px);overflow:auto}
-.tour-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.tour-progress{font-size:13px;color:#536a5b}.tour-close{padding:8px;min-height:44px;font-size:14px}
-.tour-card h2{font-size:21px;margin:4px 0 12px}.tour-card p{font-size:16px;line-height:1.8;margin:0 0 20px;overflow-wrap:anywhere}
-.tour-actions{display:flex;justify-content:space-between;gap:12px}.tour-actions button{min-width:90px}
-@media(max-width:480px){.tour-card{padding:16px}.tour-card h2{font-size:19px}.tour-card p{font-size:15px}}
+
+.context-links{font-size:13px;line-height:1.7;margin:14px 0}.context-links a{text-decoration:underline;text-underline-offset:3px}
+.apple-guide-icon{display:inline-block;object-fit:contain;vertical-align:middle;margin:0 3px}
+.label-heading{display:inline-flex;align-items:center;gap:6px;max-width:100%;text-align:left}
+.tip-trigger{display:inline-grid;place-items:center;flex:0 0 24px;width:24px;height:24px;min-height:24px;padding:0;margin:0;border:1px solid #bacdc0;border-radius:50%;background:#f2f7f3;color:#416653;font:600 13px/1 system-ui;vertical-align:middle}
+.tip-trigger:hover,.tip-trigger[aria-expanded=true]{background:#dceee2;color:#174e36;border-color:#71a383}.tip-action{display:flex;align-items:center;gap:8px}.tip-action>button:first-child{flex:1}
+.field-tooltip{position:fixed;z-index:1000;padding:13px 16px;background:#203d30;color:#fff;border:1px solid #6b8d78;border-radius:12px;font-size:14px;line-height:1.8;box-shadow:0 6px 24px #172f2630;overflow-wrap:anywhere;font-weight:400;text-align:left}
+
+/* The tutorial remains in one dialog; a clipped preview owns the spotlight. */
+#tour-dialog{position:fixed;inset:0;width:min(1140px,calc(100vw - 32px));height:min(780px,calc(100dvh - 32px));max-width:none;max-height:none;margin:auto;padding:20px;border-radius:20px;background:#f4f7f4;overflow:hidden;display:flex;flex-direction:column;animation:none}
+#tour-dialog:not([open]){display:none}#tour-dialog::backdrop{background:#142a24c9;animation:none}
+.tour-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}.tour-progress{font-size:15px;font-weight:700;color:#315e48}.tour-close{font-size:14px;padding:8px 12px}
+.tour-demo-caption{font-size:12px;color:#61756a;margin:0 0 16px;flex-shrink:0}
+.tour-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr);gap:24px;min-height:0;flex:1}
+.tour-preview{position:relative;overflow:hidden;border:1px solid #d3e0d5;border-radius:14px;min-height:0;background:#f5f7f4}
+.tour-scroller{height:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}.tour-scene{padding:26px 24px 80px;pointer-events:none;min-height:100%}.tour-scene *{animation:none!important;transition:none!important}.tour-scene h2.tour-page-title{font-size:20px;margin:0 0 24px;color:#315542}
+.tour-scene textarea{width:100%;padding:12px;border:1px solid #dce4dc;border-radius:9px;font:inherit;font-size:15px;line-height:1.6;background:white;resize:none}.tour-scene input,.tour-scene select{font-size:15px}.tour-scene .panel{padding:18px}.tour-scene .context-links{display:none}
+.tour-spot{position:absolute;z-index:1;border:3px solid #b6efd0;border-radius:12px;box-shadow:0 0 0 150vmax #142a248c;pointer-events:none;will-change:top,left,width,height}
+.tour-card{min-width:0;overflow:auto;overscroll-behavior:contain;padding:6px 6px 12px 0;scrollbar-width:thin}
+.tour-card h2{font-size:24px;line-height:1.45;margin:0 0 22px;color:#1d4d38}.tour-card p{font-size:17px;line-height:1.9;margin:0 0 20px;overflow-wrap:anywhere}.tour-card .tour-note{font-size:15px;background:#eef1e2;border-left:3px solid #ad9e4a;padding:14px 16px;border-radius:0 9px 9px 0;color:#5e542e}.tour-link{display:inline-block;margin:0 0 12px;font-size:14px;text-decoration:underline;text-underline-offset:3px}.tour-card label{font-size:13px;margin:14px 0}.tour-jump{background:white;font-size:14px;margin-top:6px}.tour-actions{display:flex;justify-content:space-between;gap:12px;margin-top:20px}.tour-actions button{min-width:100px}
+.tour-demo-note{border:1px solid #cbdcd0;border-radius:12px;padding:20px;line-height:1.9;background:#fff;margin-bottom:20px}.tour-demo-variable{padding:14px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.tour-demo-variable code{font-size:14px}.tour-demo-variable p{font-size:14px;margin:6px 0}
+@media(max-width:720px){#tour-dialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);padding:12px;border-radius:16px}.tour-layout{grid-template-columns:1fr;grid-template-rows:minmax(170px,.85fr) minmax(0,1.15fr);gap:14px}.tour-demo-caption{margin-bottom:10px;font-size:11px}.tour-scene{padding:16px 14px 50px}.tour-scene h2.tour-page-title{font-size:16px;margin-bottom:16px}.tour-card{padding:0 4px 4px}.tour-card h2{font-size:20px;margin:0 0 12px}.tour-card p{font-size:15px;line-height:1.8;margin-bottom:12px}.tour-card .tour-note{font-size:14px;padding:10px 12px}.tour-card label{margin:8px 0}.tour-actions{margin-top:12px;position:sticky;bottom:0;background:#f4f7f4;padding-top:8px}.tour-progress{font-size:14px}}
+@media(max-height:500px) and (min-width:721px){#tour-dialog{padding:12px}.tour-demo-caption{margin-bottom:6px}.tour-layout{gap:16px}}

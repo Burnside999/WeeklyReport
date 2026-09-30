@@ -27,7 +27,8 @@ function externalLink(value) {
     if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
     return (url.hostname === 'github.com' &&
       (url.pathname === '/Burnside999' || url.pathname === '/Burnside999/WeeklyReport' || url.pathname.startsWith('/Burnside999/WeeklyReport/'))) ||
-      (url.hostname === 'support.apple.com' && url.pathname === '/zh-cn/guide/iphone/iphea86e5236/ios');
+      (url.hostname === 'docs.qq.com' && (url.pathname === '/' || url.pathname.startsWith('/open/'))) ||
+      (url.hostname === 'support.apple.com' && ['/zh-cn/guide/iphone/iphea86e5236/ios', '/zh-cn/guide/iphone/iph42ab2f3a7/18.0/ios/18.0'].includes(url.pathname));
   } catch { return false; }
 }
 module.exports = { serverOrigin, sameOrigin, documentURL, trustedSender, externalLink };

@@ -3,26 +3,38 @@
   <p class="intro">查谁没填，按时发邮件，及时收提醒。</p>
   <div class="guide-shortcuts"><a href="#guide-install"><strong>安装应用 <span aria-hidden="true">↗</span></strong><span>Windows / iPhone</span></a><a href="#guide-start"><strong>第一次配置 <span aria-hidden="true">→</span></strong><span>跟着五步开始检查</span></a><a href="#guide-faq"><strong>遇到问题 <span aria-hidden="true">？</span></strong><span>查询、邮件与通知</span></a></div>
   <label class="guide-search" for="help-search">想找什么？<input id="help-search" type="search" placeholder="搜索操作、变量或问题" autocomplete="off"></label>
-  <nav class="guide-index" aria-label="手册目录"><a href="#guide-install">安装</a><a href="#guide-start">入门</a><a href="#guide-rules">查询与监听</a><a href="#guide-settings">设置</a><a href="#guide-mail">邮件与通知</a><a href="#guide-variables">变量表</a><a href="#guide-syntax">模板语法</a><a href="#guide-account">帐号</a><a href="#guide-faq">FAQ</a></nav>
+  <nav class="guide-index" aria-label="手册目录"><a href="#guide-install">安装</a><a href="#guide-credentials">腾讯凭据</a><a href="#guide-start">入门</a><a href="#guide-rules">查询与监听</a><a href="#guide-settings">设置</a><a href="#guide-mail">邮件与通知</a><a href="#guide-variables">变量表</a><a href="#guide-syntax">模板语法</a><a href="#guide-account">帐号</a><a href="#guide-faq">FAQ</a></nav>
   <p id="help-search-state" class="help" role="status"></p>
 
   <details id="guide-install" class="guide-section" open><summary><span class="guide-number">01</span>把应用装到电脑或手机</summary><div class="guide-content">
     <div class="guide-install-grid">
       <article class="guide-install-card"><p class="guide-platform">电脑</p><h2>Windows</h2><p class="guide-caption">Windows 10 / 11 · 64 位</p>
-        <ol><li>向管理员获取 <code>WeeklyReport-Setup-…-x64.exe</code> 安装包。</li><li>双击安装，完成后打开桌面“周报填写检查”。</li><li>自动连接 <strong>wrret.images.city</strong>，用原帐号登录；连接失败才需输入地址。</li><li>设置 → 允许通知，看到“消息推送启动成功！”即可。</li></ol>
+        <ol><li>打开 <a href="https://github.com/Burnside999/WeeklyReport/releases" target="_blank" rel="noopener noreferrer">Windows 下载页（Release）↗</a>，在最新版的附件（Assets）中下载 <code>WeeklyReport-Setup-…-x64.exe</code>。请勿下载 Source code。</li><li>双击安装，完成后打开桌面“周报填写检查”。</li><li>自动连接 <strong>wrret.images.city</strong>，用原帐号登录；连接失败才需输入地址。</li><li>设置 → 允许通知，看到“消息推送启动成功！”即可。</li></ol>
         <p class="guide-note"><strong>关窗口 ≠ 退出。</strong>完全关闭：任务栏右下角（可能在“∧”里）右键周报图标 → 退出。</p>
       </article>
       <article class="guide-install-card"><p class="guide-platform">手机</p><h2>iPhone</h2><p class="guide-caption">添加到主屏幕 · 无需 App Store</p>
-        <ol><li>用 <strong>Safari</strong> 打开 <a href="https://wrret.images.city">wrret.images.city</a>。</li><li>点“共享”（向上箭头；也可能在页面菜单内）→ 添加到主屏幕。</li><li>开启“作为网页 App 打开”（若有），点“添加”。</li><li>从主屏幕周报图标登录 → 设置 → 允许通知 → 系统弹窗选“允许”。</li></ol>
+        <ol><li>用 <img class="apple-guide-icon" src="/static/apple-safari.png" width="24" height="24" alt="Safari 图标"> <strong>Safari</strong> 打开 <a href="https://wrret.images.city">wrret.images.city</a>。</li><li>点工具栏的 <img class="apple-guide-icon" src="/static/apple-share.png" width="22" height="26" alt="共享图标：方框向上箭头"> <strong>共享</strong>，向下滑动菜单，点<strong>添加到主屏幕</strong>。</li><li>确认名称为“周报填写检查”，点右上角<strong>添加</strong>。</li><li>从主屏幕周报图标登录 → 设置 → 允许通知 → 系统弹窗选“允许”。</li></ol>
         <p class="guide-note">后台通知需 iOS 16.4 或以上，且网站已启用推送。请从<strong>主屏幕图标</strong>进入。</p>
       </article>
     </div>
     <p class="guide-support">Android（安卓）与 Linux 暂时不受支持。</p>
-    <details class="guide-extra"><summary>自己下载安装包 / 找不到“添加到主屏幕”？</summary><p>Windows：登录 GitHub，进入<a href="https://github.com/Burnside999/WeeklyReport/actions/workflows/windows.yml" target="_blank" rel="noopener noreferrer">安装包构建页 ↗</a> → 选 develop 最新成功运行 → 底部 Artifacts → 下载 <code>WeeklyReport-Windows-x64</code> → 解压运行 EXE。过期请管理员重新构建。</p><p>iPhone：在共享列表底部点“编辑操作”，添加“添加到主屏幕”。可参阅<a href="https://support.apple.com/zh-cn/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">苹果图文说明 ↗</a>。</p></details>
+    <details class="guide-extra"><summary>下载页没有安装包 / 找不到“添加到主屏幕”？</summary><p>Windows 安装包只通过 <a href="https://github.com/Burnside999/WeeklyReport/releases" target="_blank" rel="noopener noreferrer">Release 页面</a>发布。若暂无 EXE，请等待管理员上传。</p><p>iPhone：先确认用的是 Safari，而非微信内置浏览器。在共享列表底部点“编辑操作”，添加“添加到主屏幕”。界面因系统版本略有不同，可对照<a href="https://support.apple.com/zh-cn/guide/iphone/iph42ab2f3a7/18.0/ios/18.0" target="_blank" rel="noopener noreferrer">苹果安装图解 ↗</a>。上方 Safari、共享图标来自此苹果使用手册。</p></details>
+  </div></details>
+
+  <details id="guide-credentials" class="guide-section"><summary><span class="guide-number">准备</span>注册腾讯文档平台，获取三项凭据</summary><div class="guide-content">
+    <p>这些凭据让系统读取你有权限访问的腾讯表格。需要的是<strong>腾讯文档开放平台</strong>帐号；它和本系统的登录帐号是两回事，无需在电脑上部署腾讯平台。</p>
+    <ol class="guide-steps">
+      <li><strong>注册开发者帐号。</strong>打开 <a href="https://docs.qq.com/open/developers/" target="_blank" rel="noopener noreferrer">腾讯文档开放平台 ↗</a>，已有帐号直接登录；新用户点注册，按页面完成邮箱验证、设置密码。个人使用时选择个人类型，按要求补齐资料。</li>
+      <li><strong>绑定腾讯文档帐号。</strong>按平台的“验证并绑定”提示操作，登录平时打开周报表格的 QQ 或微信帐号并同意授权。先在 <a href="https://docs.qq.com/" target="_blank" rel="noopener noreferrer">腾讯文档 ↗</a> 确认这个帐号能打开目标表格；平台绑定后可能不支持更换，请选对帐号。</li>
+      <li><strong>找到“开发者信息”。</strong>注册、验证完成后回到开放平台首页。个人帐号在这里可看到下表三项；点每项右侧的“复制”，不要手工抄写显示的星号。</li>
+    </ol>
+    <div class="guide-table"><table><thead><tr><th>腾讯平台显示</th><th>粘贴到本系统</th></tr></thead><tbody><tr><td><code>client_id（应用ID）</code></td><td><strong>Client ID</strong>：标识开发者应用。</td></tr><tr><td><code>open_id</code></td><td><strong>Open ID</strong>：标识已授权的腾讯文档用户，不是 QQ 号。</td></tr><tr><td><code>access_token</code></td><td><strong>Access Token</strong>：访问令牌，不是邮箱密码。</td></tr></tbody></table></div>
+    <ol class="guide-steps" start="4"><li><strong>填入并验证。</strong>首次新建文档管理器时逐项粘贴；之后可在“设置 → 高级设置”修改并保存。复制腾讯在线表格的分享链接作为文档 URL；创建成功后，刷新工作表列表，能选到工作表就说明连接正常。</li><li><strong>到期时更新。</strong>以腾讯页面显示的有效期为准。失效后在 Access Token 旁点“重置”，再复制到本系统保存。同一帐号下所有文档共用这三项凭据；重置后其他使用旧令牌的服务也需要更新。</li></ol>
+    <p class="guide-note">个人帐号没有“创建应用”入口是正常的。若“开发者信息”仍不显示，先检查注册验证和绑定是否完成；企业帐号走<a href="https://docs.qq.com/open/document/app/oauth2/" target="_blank" rel="noopener noreferrer">官方授权流程 ↗</a>，请由维护者协助获取三项凭据。本系统不要求填写 Client Secret 或 Refresh Token。</p>
   </div></details>
 
   <details id="guide-start" class="guide-section"><summary><span class="guide-number">02</span>五步完成首次配置</summary><div class="guide-content">
-    <ol class="guide-steps"><li><strong>新建文档管理器。</strong>点“＋ 新建文档管理器”（也在顶部下拉框内），填名称、腾讯表格地址和凭据。</li><li><strong>选同事。</strong>设置 → 选择数据源 → 指定名单位置并读取 → 勾选人员 → 保存统计范围。</li><li><strong>选检查区域。</strong>监听管理 → 添加规则，选择工作表、责任人位置和填写范围，保存并启用。</li><li><strong>核对结果。</strong>有合并单元格先“刷新合并结构”，再点“立即查询”，确认后开启自动查询。</li><li><strong>配置提醒。</strong>请管理员配置发件邮箱，再新建模板。设备通知需设为主推送，并开启“允许通知”。</li></ol>
+    <ol class="guide-steps"><li><strong>新建文档管理器。</strong>点“＋ 新建文档管理器”（也在顶部下拉框内），填名称、腾讯表格地址和<a href="#guide-credentials">三项凭据</a>。</li><li><strong>选同事。</strong>设置 → 选择数据源 → 指定名单位置并读取 → 勾选人员 → 保存统计范围。</li><li><strong>选检查区域。</strong>监听管理 → 添加规则，选择工作表、责任人位置和填写范围，保存并启用。</li><li><strong>核对结果。</strong>有合并单元格先“刷新合并结构”，再点“立即查询”，确认后开启自动查询。</li><li><strong>配置提醒。</strong>请管理员配置发件邮箱，再新建模板。设备通知需设为主推送，并开启“允许通知”。</li></ol>
     <p class="guide-note">顶部下拉框切换当前文档；名单、规则、模板和结果都随之切换。</p>
   </div></details>
 
@@ -83,7 +95,7 @@
   </div></details>
 
   <details id="guide-faq" class="guide-section"><summary><span class="guide-number">09</span>常见问题 FAQ</summary><div class="guide-content">
-    <dl class="guide-definitions"><dt>填了仍显示未填 / 没填却统计为 0？</dt><dd>先查询，再核对人员、规则、姓名和范围。改过合并区域要刷新结构；具体判定见“查询与监听”。</dd><dt>检查异常、旧结果、null，或读不到工作表？</dt><dd>核对表格地址、权限和凭据。Access Token 不会自动续期，失效需重新获取并保存。刷新列表再查询，勿依赖旧结果。</dd><dt>到点了，自动邮件为什么没发？</dt><dd>核对北京时间、星期、条件和模板状态。未填数据需到点后成功查询；模板标红、变量未知、本周期已触发都不会再发。</dd><dt>按钮不能点，或模板突然标红？</dt><dd>发送中、语法错误、本页已发送成功会禁用按钮；自动模板需等待系统。规则改名、删除后，请到变量表核对引用，按红框的行列提示修正。</dd><dt>邮件显示成功，却没收到？</dt><dd>成功表示发件服务器接受。核对地址、垃圾邮件和邮箱规则，稍等再看；不确定时先核实再重发。</dd><dt>开了通知却没有弹窗？</dt><dd>检查本设备开关、浏览器或系统权限、勿扰模式，以及实际触发的是否为主推送。Windows 要留在托盘，网页要保持打开，iPhone 要从主屏幕应用开启。</dd><dt>收到通知，但邮件失败？</dt><dd>两者独立。查看模板错误提示，请管理员核对 SMTP；通知不能证明邮件发送成功。</dd><dt>提示“已在其他页面修改”？</dt><dd>保留未保存的文字，刷新读取最新配置后再编辑。</dd><dt>更新后没变化？Windows 要重装吗？</dt><dd>先确认服务器已部署，再刷新网页或用托盘“重新加载页面”。网页业务更新通常不用重装；托盘、连接等客户端功能变化才需新安装包。</dd></dl>
+    <dl class="guide-definitions"><dt>填了仍显示未填 / 没填却统计为 0？</dt><dd>先查询，再核对人员、规则、姓名和范围。改过合并区域要刷新结构；具体判定见“查询与监听”。</dd><dt>检查异常、旧结果、null，或读不到工作表？</dt><dd>核对表格地址、权限和凭据。Access Token 不会自动续期，失效需<a href="#guide-credentials">重新获取并保存</a>。刷新列表再查询，勿依赖旧结果。</dd><dt>到点了，自动邮件为什么没发？</dt><dd>核对北京时间、星期、条件和模板状态。未填数据需到点后成功查询；模板标红、变量未知、本周期已触发都不会再发。</dd><dt>按钮不能点，或模板突然标红？</dt><dd>发送中、语法错误、本页已发送成功会禁用按钮；自动模板需等待系统。规则改名、删除后，请到变量表核对引用，按红框的行列提示修正。</dd><dt>邮件显示成功，却没收到？</dt><dd>成功表示发件服务器接受。核对地址、垃圾邮件和邮箱规则，稍等再看；不确定时先核实再重发。</dd><dt>开了通知却没有弹窗？</dt><dd>检查本设备开关、浏览器或系统权限、勿扰模式，以及实际触发的是否为主推送。Windows 要留在托盘，网页要保持打开，iPhone 要从主屏幕应用开启。</dd><dt>收到通知，但邮件失败？</dt><dd>两者独立。查看模板错误提示，请管理员核对 SMTP；通知不能证明邮件发送成功。</dd><dt>提示“已在其他页面修改”？</dt><dd>保留未保存的文字，刷新读取最新配置后再编辑。</dd><dt>更新后没变化？Windows 要重装吗？</dt><dd>先确认服务器已部署，再刷新网页或用托盘“重新加载页面”。网页业务更新通常不用重装；托盘、连接等客户端功能变化才需新安装包。</dd></dl>
   </div></details>
-  <div class="guide-tour-start"><div><h2>跟着界面走一遍</h2><p>认识常用入口，随时退出。</p></div><button id="start-tour" class="primary" type="button">开始教程引导</button></div>
+  <div class="guide-tour-start"><div><h2>跟着界面走一遍</h2><p>20 步，从获取凭据到发出提醒。可跳转章节，随时退出。</p></div><button id="start-tour" class="primary" type="button">开始教程引导</button></div>
 </section>

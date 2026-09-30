@@ -104,7 +104,7 @@ function configureServer(value) {
   const current = window;
   current.removeMenu();
   current.webContents.setWindowOpenHandler(({ url }) => {
-    if (externalLink(url)) shell.openExternal(url).catch(() => {});
+    if (externalLink(url) || (sameOrigin(url, origin) && new URL(url).pathname === '/help')) shell.openExternal(url).catch(() => {});
     return { action: 'deny' };
   });
   current.webContents.on('will-attach-webview', event => event.preventDefault());
