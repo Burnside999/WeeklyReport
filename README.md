@@ -1,6 +1,14 @@
 # WeeklyReport · 周报填写检查
 
-手机优先的腾讯文档在线表格监听器。帐号密码登录后，每个文档管理器有五个页面：**填写情况**、**监听管理**、**邮件模板**、**设置**与**变量表**。默认每 5 分钟由服务器检查一次，关闭浏览器也会继续运行。首页“开启自动查询”可暂停后台查询，刷新页面或重启后保留开关状态；关闭时仍可点击“立即查询”。开启后立即查询，再按设置间隔执行。关闭时已经开始的查询会完成，不再启动下一轮；保存规则或设置不会绕过关闭状态。
+> **develop 测试分支**：新增主推送、iPhone PWA 通知与 [Windows 托盘客户端及安装程序](desktop/README.md)。请在独立服务器和域名部署，完整步骤见 [develop 部署与真机验收](deploy/DEVELOP.md)。Apple 设备推送默认关闭；Windows 与普通网页通知无需开启 Apple 推送，原有邮件功能继续保留。
+
+手机优先的腾讯文档在线表格监听器。帐号密码登录后，页面包括**填写情况**、**监听管理**、**邮件模板**、**设置**、**变量表**和**帮助手册**；管理员另有管理页。默认每 5 分钟由服务器检查一次，关闭浏览器也会继续运行。首页“开启自动查询”可暂停后台查询，刷新页面或重启后保留开关状态；关闭时仍可点击“立即查询”。开启后立即查询，再按设置间隔执行。关闭时已经开始的查询会完成，不再启动下一轮；保存规则或设置不会绕过关闭状态。
+
+## 版本与维护
+
+当前正式版本基线为 **1.0.0**。应用和原生客户端分别编号，统一由 [app/release.json](app/release.json) 管理。页面底部显示服务器应用版本；Windows 同时显示实际安装的客户端版本。修改网页后部署服务器即可，只有客户端自身改变才需要重新分发安装包。
+
+版本发布、新增客户端约定及代码目录见 [维护指南](docs/MAINTAINING.md)。
 
 ## Docker 部署
 
@@ -29,11 +37,11 @@ docker compose up -d --build
 
 **公开访问文档不代表官方 Open API 可以匿名访问。** 本项目使用腾讯官方接口，不依赖 Cookie 抓取或未公开的网页内部接口。需要腾讯文档开放平台的应用与用户授权。
 
-1. 在[腾讯文档开放平台](https://docs.qq.com/open/)创建应用，获取 Client ID / Client Secret。
-2. 按[官方 OAuth 授权流程](https://docs.qq.com/open/document/app/oauth2/)让有权访问目标表格的账号授权，获取对应的 `user_id`（Open ID）、Access Token、Refresh Token。授权及授权码兑换在腾讯平台完成；本应用设置页接收已有凭据，不提供 OAuth 回调页面。
-3. 申请 `scope.sheet.readonly`（读取表格）与 `scope.drive.exportable`（读取真实合并结构）。自动将分享链接转换为 File ID 还需 `scope.drive.file.metadata.readonly` 或转换接口文档列出的其他许可。File ID 由分享链接自动转换，无需手动填写。
-4. 登录本应用，打开 **设置 → 高级设置**，填写 Client ID、Open ID、Access Token 并保存。
-5. 本应用仅使用 Access Token，过期后手动更新；不再配置 Refresh Token 或 Client Secret。
+1. 打开[腾讯文档开放平台](https://docs.qq.com/open/developers/)，注册个人开发者帐号并完成验证，绑定有权打开目标表格的腾讯文档帐号。
+2. 在平台首页的“开发者信息”中，分别复制 `client_id（应用ID）`、`open_id`、`access_token`。个人帐号无需创建应用；请复制完整值，不要抄写掩码星号。
+3. 首次新建文档管理器时填入三项凭据和腾讯在线表格分享链接；之后在 **设置 → 高级设置** 更新。保存后刷新工作表列表验证连接。
+4. 以平台显示的 Token 有效期为准；失效后重置并更新本系统，旧令牌会影响其他使用它的服务。本系统不自动续期。
+5. 企业应用接入参阅[官方 OAuth 授权流程](https://docs.qq.com/open/document/app/oauth2/)，由维护者协助取得三项凭据。本应用不提供 OAuth 回调，不配置 Client Secret 或 Refresh Token。详细新手步骤在应用的 **帮助手册 → 腾讯凭据**。
 6. 在“设置 → 选择数据源”（默认折叠）中读取工作表列表，从下拉框选择名单工作表，并选择行分布或列分布及对应范围，保存读取。默认全选，可取消勾选休假同事后保存统计范围。
 7. 添加监听规则，从下拉框选择工作表，选择分布方式、责任人位置、一个或多个待填行/列及范围。若表格存在合并单元格，请在设置中手动刷新合并结构；查询不会自动导出，填写内容仍走 V3 实时读取。
 
@@ -236,3 +244,12 @@ SMTP 不提供严格的端到端“恰好一次”保证：部分收件人拒收
 记忆凭证使用随机 Cookie（HttpOnly、SameSite=Strict；HTTPS 部署必须设置 COOKIE_SECURE=true），数据库只存凭证摘要与帐号版本，可跨应用重启使用。普通会话使用浏览器会话 Cookie，最长时长仍由 SESSION_HOURS 控制。
 
 登录、新建用户和重置密码均使用浏览器 Web Crypto 的 AES-256-GCM + RSA-OAEP-SHA256 加密信封，服务端拒收 password 明文字段，单次加密凭据 120 秒过期且只能使用一次。密码仍以 scrypt 加盐摘要保存，兼容已有用户。Web Crypto 要求 HTTPS（本机 localhost 可用于测试）；应用层加密不能代替 HTTPS 的身份校验与传输保护。
+
+
+## 帮助与教程维护
+
+Windows 安装包唯一用户入口为 [Release 页面](https://github.com/Burnside999/WeeklyReport/releases)，由维护者上传安装包；帮助页不引导用户获取构建产物。20 步教程使用真实表单结构的隔离演示副本，包含示例数据，不写入配置、不触发邮件，新帐号无需先建文档即可完整学习。
+
+服务凭据表单使用 `autocomplete="off"`，新用户密码保持 `autocomplete="new-password"`，所有密码字段保留 `type="password"`。这些是提示，无法强制所有浏览器或密码管理器停止弹出保存建议；未更改登录页的密码保存功能。参考 [MDN 自动填充说明](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/Turning_off_form_autocompletion)。
+
+安装说明中的 Safari 与共享图标来自 [Apple iPhone 使用手册（iOS 18）](https://support.apple.com/zh-cn/guide/iphone/iph42ab2f3a7/18.0/ios/18.0)，对应资源 `GlobalArt/IL_Safari.png`、`GlobalArt/IL_ShareBlue.png`，仅用于说明相应系统操作；图标归 Apple 所有。

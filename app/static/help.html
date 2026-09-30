@@ -1,0 +1,101 @@
+<section id="help" hidden>
+  <div class="page-heading"><div><p class="eyebrow">使用指南</p><h1>帮助手册</h1><p class="help-author">开发者 · <a href="https://github.com/Burnside999" target="_blank" rel="noopener noreferrer">Burnside999 ↗</a></p></div></div>
+  <p class="intro">查谁没填，按时发邮件，及时收提醒。</p>
+  <div class="guide-shortcuts"><a href="#guide-install"><strong>安装应用 <span aria-hidden="true">↗</span></strong><span>Windows / iPhone</span></a><a href="#guide-start"><strong>第一次配置 <span aria-hidden="true">→</span></strong><span>跟着五步开始检查</span></a><a href="#guide-faq"><strong>遇到问题 <span aria-hidden="true">？</span></strong><span>查询、邮件与通知</span></a></div>
+  <label class="guide-search" for="help-search">想找什么？<input id="help-search" type="search" placeholder="搜索操作、变量或问题" autocomplete="off"></label>
+  <nav class="guide-index" aria-label="手册目录"><a href="#guide-install">安装</a><a href="#guide-credentials">腾讯凭据</a><a href="#guide-start">入门</a><a href="#guide-rules">查询与监听</a><a href="#guide-settings">设置</a><a href="#guide-mail">邮件与通知</a><a href="#guide-variables">变量表</a><a href="#guide-syntax">模板语法</a><a href="#guide-account">帐号</a><a href="#guide-faq">FAQ</a></nav>
+  <p id="help-search-state" class="help" role="status"></p>
+
+  <details id="guide-install" class="guide-section" open><summary><span class="guide-number">01</span>把应用装到电脑或手机</summary><div class="guide-content">
+    <div class="guide-install-grid">
+      <article class="guide-install-card"><p class="guide-platform">电脑</p><h2>Windows</h2><p class="guide-caption">Windows 10 / 11 · 64 位</p>
+        <ol><li>打开 <a href="https://github.com/Burnside999/WeeklyReport/releases" target="_blank" rel="noopener noreferrer">Windows 下载页（Release）↗</a>，在最新版的附件（Assets）中下载 <code>WeeklyReport-Setup-…-x64.exe</code>。请勿下载 Source code。</li><li>双击安装，完成后打开桌面“周报填写检查”。</li><li>自动连接 <strong>wrret.images.city</strong>，用原帐号登录；连接失败才需输入地址。</li><li>设置 → 允许通知，看到“消息推送启动成功！”即可。</li></ol>
+        <p class="guide-note"><strong>关窗口 ≠ 退出。</strong>完全关闭：任务栏右下角（可能在“∧”里）右键周报图标 → 退出。</p>
+      </article>
+      <article class="guide-install-card"><p class="guide-platform">手机</p><h2>iPhone</h2><p class="guide-caption">添加到主屏幕 · 无需 App Store</p>
+        <ol><li>用 <img class="apple-guide-icon" src="/static/apple-safari.png" width="24" height="24" alt="Safari 图标"> <strong>Safari</strong> 打开 <a href="https://wrret.images.city">wrret.images.city</a>。</li><li>点工具栏的 <img class="apple-guide-icon" src="/static/apple-share.png" width="22" height="26" alt="共享图标：方框向上箭头"> <strong>共享</strong>，向下滑动菜单，点<strong>添加到主屏幕</strong>。</li><li>确认名称为“周报填写检查”，点右上角<strong>添加</strong>。</li><li>从主屏幕周报图标登录 → 设置 → 允许通知 → 系统弹窗选“允许”。</li></ol>
+        <p class="guide-note">后台通知需 iOS 16.4 或以上，且网站已启用推送。请从<strong>主屏幕图标</strong>进入。</p>
+      </article>
+    </div>
+    <p class="guide-support">Android（安卓）与 Linux 暂时不受支持。</p>
+    <details class="guide-extra"><summary>下载页没有安装包 / 找不到“添加到主屏幕”？</summary><p>Windows 安装包只通过 <a href="https://github.com/Burnside999/WeeklyReport/releases" target="_blank" rel="noopener noreferrer">Release 页面</a>发布。若暂无 EXE，请等待管理员上传。</p><p>iPhone：先确认用的是 Safari，而非微信内置浏览器。在共享列表底部点“编辑操作”，添加“添加到主屏幕”。界面因系统版本略有不同，可对照<a href="https://support.apple.com/zh-cn/guide/iphone/iph42ab2f3a7/18.0/ios/18.0" target="_blank" rel="noopener noreferrer">苹果安装图解 ↗</a>。上方 Safari、共享图标来自此苹果使用手册。</p></details>
+  </div></details>
+
+  <details id="guide-credentials" class="guide-section"><summary><span class="guide-number">准备</span>注册腾讯文档平台，获取三项凭据</summary><div class="guide-content">
+    <p>这些凭据让系统读取你有权限访问的腾讯表格。需要的是<strong>腾讯文档开放平台</strong>帐号；它和本系统的登录帐号是两回事，无需在电脑上部署腾讯平台。</p>
+    <ol class="guide-steps">
+      <li><strong>注册开发者帐号。</strong>打开 <a href="https://docs.qq.com/open/developers/" target="_blank" rel="noopener noreferrer">腾讯文档开放平台 ↗</a>，已有帐号直接登录；新用户点注册，按页面完成邮箱验证、设置密码。个人使用时选择个人类型，按要求补齐资料。</li>
+      <li><strong>绑定腾讯文档帐号。</strong>按平台的“验证并绑定”提示操作，登录平时打开周报表格的 QQ 或微信帐号并同意授权。先在 <a href="https://docs.qq.com/" target="_blank" rel="noopener noreferrer">腾讯文档 ↗</a> 确认这个帐号能打开目标表格；平台绑定后可能不支持更换，请选对帐号。</li>
+      <li><strong>找到“开发者信息”。</strong>注册、验证完成后回到开放平台首页。个人帐号在这里可看到下表三项；点每项右侧的“复制”，不要手工抄写显示的星号。</li>
+    </ol>
+    <div class="guide-table"><table><thead><tr><th>腾讯平台显示</th><th>粘贴到本系统</th></tr></thead><tbody><tr><td><code>client_id（应用ID）</code></td><td><strong>Client ID</strong>：标识开发者应用。</td></tr><tr><td><code>open_id</code></td><td><strong>Open ID</strong>：标识已授权的腾讯文档用户，不是 QQ 号。</td></tr><tr><td><code>access_token</code></td><td><strong>Access Token</strong>：访问令牌，不是邮箱密码。</td></tr></tbody></table></div>
+    <ol class="guide-steps" start="4"><li><strong>填入并验证。</strong>首次新建文档管理器时逐项粘贴；之后可在“设置 → 高级设置”修改并保存。复制腾讯在线表格的分享链接作为文档 URL；创建成功后，刷新工作表列表，能选到工作表就说明连接正常。</li><li><strong>到期时更新。</strong>以腾讯页面显示的有效期为准。失效后在 Access Token 旁点“重置”，再复制到本系统保存。同一帐号下所有文档共用这三项凭据；重置后其他使用旧令牌的服务也需要更新。</li></ol>
+    <p class="guide-note">个人帐号没有“创建应用”入口是正常的。若“开发者信息”仍不显示，先检查注册验证和绑定是否完成；企业帐号走<a href="https://docs.qq.com/open/document/app/oauth2/" target="_blank" rel="noopener noreferrer">官方授权流程 ↗</a>，请由维护者协助获取三项凭据。本系统不要求填写 Client Secret 或 Refresh Token。</p>
+  </div></details>
+
+  <details id="guide-start" class="guide-section"><summary><span class="guide-number">02</span>五步完成首次配置</summary><div class="guide-content">
+    <ol class="guide-steps"><li><strong>新建文档管理器。</strong>点“＋ 新建文档管理器”（也在顶部下拉框内），填名称、腾讯表格地址和<a href="#guide-credentials">三项凭据</a>。</li><li><strong>选同事。</strong>设置 → 选择数据源 → 指定名单位置并读取 → 勾选人员 → 保存统计范围。</li><li><strong>选检查区域。</strong>监听管理 → 添加规则，选择工作表、责任人位置和填写范围，保存并启用。</li><li><strong>核对结果。</strong>有合并单元格先“刷新合并结构”，再点“立即查询”，确认后开启自动查询。</li><li><strong>配置提醒。</strong>请管理员配置发件邮箱，再新建模板。设备通知需设为主推送，并开启“允许通知”。</li></ol>
+    <p class="guide-note">顶部下拉框切换当前文档；名单、规则、模板和结果都随之切换。</p>
+  </div></details>
+
+  <details id="guide-rules" class="guide-section"><summary><span class="guide-number">03</span>查询与监听：谁还没填？</summary><div class="guide-content">
+    <dl class="guide-definitions"><dt>立即查询 / 开启自动查询</dt><dd>立即查询检查一次；自动查询按设置间隔持续检查，关闭网页也继续。</dd><dt>未填人数 / 未填条目</dt><dd>人数去重，同一规则下同一个人的空任务合并显示。点工作表名称打开原表。</dd><dt>添加 / 编辑 / 启用 / 删除规则</dt><dd>添加、编辑检查区域；关闭“启用”暂停并保留规则；删除则移除。改名或删除后核对模板引用。</dd></dl>
+    <div class="guide-table"><table><thead><tr><th>人员排列</th><th>配置示例</th></tr></thead><tbody><tr><td>沿一列向下</td><td>选列分布：责任人 A 列，检查 C,D 列，范围 2–100 行。</td></tr><tr><td>沿一行向右</td><td>选行分布：责任人第 1 行，检查第 3,4 行，范围 B–Z 列。</td></tr></tbody></table></div>
+    <p class="guide-note"><strong>任意一格有内容就算已填。</strong>责任人的合并区域算一项任务，范围需覆盖完整；同一人在别处的空任务仍会计入。</p><p>姓名按文本匹配，包括括号内文字；名单备注不会自动去除。请保持姓名写法一致，避免短姓名误匹配。</p>
+  </div></details>
+
+  <details id="guide-settings" class="guide-section"><summary><span class="guide-number">04</span>设置：名单、合并结构与通知</summary><div class="guide-content">
+    <dl class="guide-definitions"><dt>保存设置 / 刷新工作表列表</dt><dd>保存管理器名称；换表请新建管理器。工作表新增或改名后刷新列表。</dd><dt>保存数据源并读取名单 / 保存统计范围</dt><dd>保存名单位置、读入姓名；全选、全不选仅改变勾选，“保存统计范围”才生效。</dd><dt>刷新合并结构</dt><dd>新增、拆分或调整合并单元格后使用；只改文字不用刷新。</dd><dt>允许通知</dt><dd>只控制本设备。开启成功显示“消息推送启动成功！”，关闭停止本机提醒，不影响邮件或其他设备。</dd><dt>高级设置 / 保存高级设置</dt><dd>调整查询间隔、超时和腾讯文档凭据（Client ID、Open ID、Access Token）后保存。凭据由同一帐号的文档共用。</dd><dt>删除该文档管理器</dt><dd>删除本系统中的配置、规则、模板和记录，不删除腾讯原表。</dd></dl>
+    <p class="guide-note">时间统一为北京时间 <code>yyyy-mm-dd hh:mm:ss</code>；日期变量、时刻变量分别只含日期、时分秒。</p>
+  </div></details>
+
+  <details id="guide-mail" class="guide-section"><summary><span class="guide-number">05</span>邮件与通知：什么时候提醒？</summary><div class="guide-content">
+    <p>新建模板填 1–5 个接收邮箱、标题、正文。“添加接收人 / 移除”调整邮箱，“保存模板”生效，“取消”放弃编辑。纯文本邮件，标题不能换行。</p>
+    <dl class="guide-definitions"><dt>手动：发送邮件</dt><dd>本页成功后按钮禁用，刷新可再发；5 分钟内重复需确认。</dd><dt>自动：每周几检查 / 固定时刻</dt><dd>每周：所选当天到点后检查条件，当天结束停止，不跨天补发，每个检查日触发一次。固定：从指定日期时刻起等待条件满足，不在当天结束时取消。</dd><dt>变量 / 关系 / 值</dt><dd>例如 <code>global.personcount → 大于 → 0</code>，表示还有人没填。可选整数或布尔变量，布尔值用 <code>true</code> / <code>false</code>。</dd><dt>等待自动触发 / 重置自动触发</dt><dd>等待由系统处理；完成或失败后可重置。时间和条件已满足时，重置可能立即再发，请先核对邮箱。</dd><dt>设为主推送 / 取消主推送</dt><dd><strong>每个文档最多一个，也可不选。</strong>此模板触发时，设备提醒显示替换变量后的邮件标题，不改变接收人或条件。</dd></dl>
+    <p class="guide-note">未填数据需到点后成功查询，建议开启自动查询。</p>
+    <p>电脑网页需允许浏览器通知并保持页面打开。首次开启不补发历史消息；Windows 休眠、断网或退出时不实时接收，恢复后只补读有效期内消息。</p>
+  </div></details>
+
+  <details id="guide-variables" class="guide-section"><summary><span class="guide-number">06</span>变量表：把查询结果写进邮件</summary><div class="guide-content">
+    <p>查变量名、类型、含义和值，复制到模板使用。“刷新变量”读当前值，不代替查询。</p>
+    <div class="guide-table"><table><thead><tr><th>变量</th><th>用来做什么</th></tr></thead><tbody>
+      <tr><td><code>global.personcount</code></td><td>未填人数，可作自动触发条件。</td></tr><tr><td><code>global.personlist</code><br><code>global.people</code></td><td>姓名文本（逗号分隔） / 供循环使用的姓名列表。</td></tr><tr><td><code>global.date</code><br><code>global.time</code><br><code>global.lastquery</code></td><td>日期 / 时刻 / 上次查询开始时间。</td></tr><tr><td><code>global.week.duration</code></td><td>本周日期区间。换成 <code>preweek</code> / <code>postweek</code> 为上周 / 下周；<code>global.postweek.monday</code> 为下周一。</td></tr><tr><td><code>global.healthy</code></td><td>1 结果有效；0 查询异常；2 查询中；null 尚无有效结果。</td></tr><tr><td><code>listener1.personcount</code><br><code>listener1.personlist</code></td><td>某规则的未填人数 / 姓名；listener1 换成实际规则变量名。</td></tr><tr><td><code>global.alllistener</code></td><td>全部规则的列表，供循环逐条输出。</td></tr>
+    </tbody></table></div>
+    <p class="guide-note"><strong>null 是未知，不是 0。</strong>未查询、查询失败、规则未启用时可能出现；直接引用它不能发送，请先查询。</p>
+  </div></details>
+
+  <details id="guide-syntax" class="guide-section"><summary><span class="guide-number">07</span>模板语法：从一个例子开始</summary><div class="guide-content">
+    <h2>① 插入变量</h2><p><code>{{变量名}}</code> 会替换成当前值，名称区分大小写。蓝色为合法引用；标红可保存、不能发送。</p>
+    <pre class="guide-example"><code>【周报提醒】{{global.date}} 尚有 {{global.personcount}} 人未填写</code></pre>
+    <pre class="guide-example"><code>本周：{{global.week.duration}}
+尚未填写：{{global.personlist}}
+请前往填写：{{global.url}}
+上次查询：{{global.lastquery}}</code></pre>
+    <h2>② 逐个列出姓名</h2><p>列表要用 <code>for</code> 循环，不能直接放进双花括号。循环名只在循环内有效。</p>
+    <pre class="guide-example"><code>{% for person in global.people %}
+• {{person}}
+{% endfor %}</code></pre>
+    <h2>③ 按规则分组，并筛选</h2><p><code>with</code> 后写条件；下例筛选启用且有人未填的规则。字段带循环名前缀，启用用 <code>true</code>，不用 <code>1</code>。</p>
+    <pre class="guide-example"><code>{% for listener in global.alllistener with listener.enable == true and listener.personcount &gt; 0 %}
+{{listener.name}}：{{listener.personcount}} 人未填
+{% for person in listener.people %}
+• {{person}}
+{% endfor %}
+{% endfor %}</code></pre>
+    <h2>④ 只选指定规则</h2><p>将 listener1、listener2 换成变量表里的真实名称。</p>
+    <pre class="guide-example" data-requires-listeners="true"><code>{% for item in [listener1, listener2] with item.enable == true %}
+{{item.name}}：{{item.personlist}}
+{% endfor %}</code></pre>
+    <ul><li>比较：<code>== !=</code>，数字还支持 <code>&gt; &gt;= &lt; &lt;=</code>。字符串加引号，如 <code>listener.name == "本周进展"</code>。</li><li>用 <code>and</code>、<code>or</code>、括号组合条件；类型须一致，筛选中遇到未知值会跳过该项。</li><li>循环最多 3 层，每个 <code>for</code> 对应一个 <code>endfor</code>，循环名不能占用已有变量名。</li><li>不支持 <code>if</code>、函数、算术或执行代码；筛选请用 <code>with</code>。</li></ul>
+  </div></details>
+
+  <details id="guide-account" class="guide-section"><summary><span class="guide-number">08</span>帐号与管理</summary><div class="guide-content">
+    <p>只在可信设备开启“记住密码 / 自动登录”。“退出登录”同时停止本设备通知。</p>
+    <dl class="guide-definitions"><dt>普通用户 / 管理员 / 超级管理员</dt><dd>普通用户管理自己的文档；管理员还可配置发件邮箱、管理普通用户；超级管理员可改权限。删除用户会删除其文档配置。</dd><dt>保存 SMTP 设置</dt><dd>按邮箱服务商提供的参数填服务器、端口、加密方式、发件邮箱和授权码。接收人仍在各模板填写。</dd><dt>新建用户 / 编辑 / 保存用户</dt><dd>编辑时密码留空保留原密码。用户名 3–64 位，可用字母、数字、点、下划线、短横线；密码至少 12 个字符。</dd></dl>
+  </div></details>
+
+  <details id="guide-faq" class="guide-section"><summary><span class="guide-number">09</span>常见问题 FAQ</summary><div class="guide-content">
+    <dl class="guide-definitions"><dt>填了仍显示未填 / 没填却统计为 0？</dt><dd>先查询，再核对人员、规则、姓名和范围。改过合并区域要刷新结构；具体判定见“查询与监听”。</dd><dt>检查异常、旧结果、null，或读不到工作表？</dt><dd>核对表格地址、权限和凭据。Access Token 不会自动续期，失效需<a href="#guide-credentials">重新获取并保存</a>。刷新列表再查询，勿依赖旧结果。</dd><dt>到点了，自动邮件为什么没发？</dt><dd>核对北京时间、星期、条件和模板状态。未填数据需到点后成功查询；模板标红、变量未知、本周期已触发都不会再发。</dd><dt>按钮不能点，或模板突然标红？</dt><dd>发送中、语法错误、本页已发送成功会禁用按钮；自动模板需等待系统。规则改名、删除后，请到变量表核对引用，按红框的行列提示修正。</dd><dt>邮件显示成功，却没收到？</dt><dd>成功表示发件服务器接受。核对地址、垃圾邮件和邮箱规则，稍等再看；不确定时先核实再重发。</dd><dt>开了通知却没有弹窗？</dt><dd>检查本设备开关、浏览器或系统权限、勿扰模式，以及实际触发的是否为主推送。Windows 要留在托盘，网页要保持打开，iPhone 要从主屏幕应用开启。</dd><dt>收到通知，但邮件失败？</dt><dd>两者独立。查看模板错误提示，请管理员核对 SMTP；通知不能证明邮件发送成功。</dd><dt>提示“已在其他页面修改”？</dt><dd>保留未保存的文字，刷新读取最新配置后再编辑。</dd><dt>更新后没变化？Windows 要重装吗？</dt><dd>先确认服务器已部署，再刷新网页或用托盘“重新加载页面”。网页业务更新通常不用重装；托盘、连接等客户端功能变化才需新安装包。</dd></dl>
+  </div></details>
+  <div class="guide-tour-start"><div><h2>跟着界面走一遍</h2><p>20 步，从获取凭据到发出提醒。可跳转章节，随时退出。</p></div><button id="start-tour" class="primary" type="button">开始教程引导</button></div>
+</section>

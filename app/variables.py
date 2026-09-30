@@ -1,11 +1,11 @@
 """Typed, read-only variable catalog shared by the UI and future mail templates."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from .core import letters, target_columns, is_row
 from .template_language import nest
+from .display_time import LOCAL_TZ, display_datetime
 
-LOCAL_TZ = timezone(timedelta(hours=8), 'Asia/Shanghai')
 DAYS = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
 DAY_LABELS = ('一', '二', '三', '四', '五', '六', '日')
 
@@ -49,7 +49,7 @@ def build_variables(store, running=False, current=None):
     health = 2 if running else 0 if snapshot.get('stale') else 1 if valid else None
     add('global.healthy', 'integer', '系统状态', health)
     last = snapshot.get('last_attempt')
-    add('global.lastquery', 'datetime', '上次查询开始时间', datetime.fromisoformat(last).astimezone(LOCAL_TZ).isoformat(timespec='seconds') if last else None)
+    add('global.lastquery', 'datetime', '上次查询开始时间', display_datetime(last))
     parts = urlsplit(url)
     for rule in rules:
         prefix = rule['variable_name']
@@ -90,4 +90,3 @@ def build_variables(store, running=False, current=None):
     return dict(schema=schema, listener_names=[r['variable_name'] for r in rules], generated_at=current.isoformat(timespec='seconds'), timezone='Asia/Shanghai',
                 query_running=running, results_available=valid,
                 rows=rows, values=values)
-

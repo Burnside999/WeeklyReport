@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "application": {
+    "name": "weeklyreport",
+    "version": "1.0.0"
+  },
+  "client_protocol": 1,
+  "clients": {
+    "web": { "label": "Web", "kind": "web" },
+    "ios": { "label": "iOS", "kind": "web" },
+    "windows": { "label": "Windows", "kind": "native", "version": "1.0.0" }
+  }
+}

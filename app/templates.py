@@ -9,6 +9,7 @@ from datetime import date, datetime, time
 from .mail import SMTPConfig, SMTPMailer, DeliveryError, recipients_list
 from .variables import LOCAL_TZ, build_variables
 from .template_language import Program, TemplateSyntaxError
+from .display_time import display_datetime
 
 OPS = {'gt': operator.gt, 'lt': operator.lt, 'eq': operator.eq}
 COMPARABLE = {'integer', 'boolean'}
@@ -27,9 +28,12 @@ def stamp(current=None):
 
 
 def parse_datetime(value):
-    if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?', value):
-        raise ValueError('时间点须为完整日期和时间，例如 2026-09-25T09:00')
-    result = datetime.fromisoformat(value)
+    if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?', value):
+        raise ValueError('时间点须为完整日期和时间，例如 2026-09-25 09:00:00')
+    try:
+        result = datetime.fromisoformat(value)
+    except ValueError:
+        raise ValueError('日期或时刻无效，请按 yyyy-mm-dd hh:mm:ss 填写') from None
     return (result if result.tzinfo else result.replace(tzinfo=LOCAL_TZ)).astimezone(LOCAL_TZ)
 
 
@@ -137,8 +141,9 @@ def validate_template(raw, catalog, *, check_references=True):
 
 
 class MailEngine:
-    def __init__(self, store, monitor, sender=None, clock=None):
+    def __init__(self, store, monitor, sender=None, clock=None, notifications=None):
         self.store, self.monitor = store, monitor
+        self.notifications = notifications
         self.sender = sender
         self.clock = clock or (lambda: datetime.now(LOCAL_TZ))
         self.lock = asyncio.Lock()
@@ -235,6 +240,8 @@ class MailEngine:
         if self.get(identifier)['revision'] != revision:
             raise TemplateConflict('模板已修改，请刷新后重试')
         self.store.set('mail_templates', [x for x in self.items() if x['id'] != identifier])
+        if self.notifications:
+            self.notifications.clear_trigger(self.store.id, identifier)
 
     def reset(self, identifier, revision):
         self.ensure_idle()
@@ -249,7 +256,7 @@ class MailEngine:
     def recent(self, item, current, confirmation):
         if item.get('last_trigger') and (current - datetime.fromisoformat(item['last_trigger'])).total_seconds() < 300:
             if confirmation != item['attempt']:
-                raise TemplateConflict(f"你已在 {item['last_trigger']} 触发过此规则，确定要再次触发吗？",
+                raise TemplateConflict(f"你已在 {display_datetime(item['last_trigger'])} 触发过此规则，确定要再次触发吗？",
                     confirmation_required=True, confirm_attempt=item['attempt'], last_trigger=item['last_trigger'])
 
     async def manual(self, identifier, raw):
@@ -272,7 +279,15 @@ class MailEngine:
         if '\n' in subject or '\r' in subject or len(subject) > 998 or len(body) > 200000:
             raise ValueError('替换变量后的标题包含换行、过长，或正文超过 20 万字')
         item.update(status='sending', error='', note='', last_trigger=stamp(current), attempt=secrets.token_hex(16))
-        self.write(item)  # durable claim BEFORE the irreversible SMTP operation
+        if self.notifications:
+            try:
+                self.notifications.claim(self.store, item, subject)
+            except Exception:
+                # Notification failures must not suppress the existing email path.
+                LOG.error('Could not persist primary notification; continuing email delivery')
+                self.write(item)
+        else:
+            self.write(item)  # durable claim BEFORE the irreversible SMTP operation
         try:
             sender = self.sender or SMTPMailer(SMTPConfig.from_settings(self.store.settings())).send
             await sender(subject=subject, text=body, recipients=item['recipients'])
@@ -310,7 +325,7 @@ class MailEngine:
                     if item['status'] != 'waiting':
                         continue
                     if current < target:
-                        item['note'] = '等待到达触发时间：' + cycle
+                        item['note'] = '等待到达触发时间：' + display_datetime(target)
                     elif self.monitor.running:
                         item['note'] = '正在查询表格，等待完整结果'
                     else:
@@ -346,4 +361,3 @@ class MailEngine:
                 await asyncio.wait_for(self.wake.wait(), 15)
             except asyncio.TimeoutError:
                 pass
-

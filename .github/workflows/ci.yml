@@ -12,8 +12,16 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: pip install -r requirements.txt
+      - run: python scripts/release.py --check
       - run: python -m unittest discover -s tests -v
-      - run: node --check app/static/app.js && node --check app/static/login.js && node --check app/static/mail.js && node --check app/static/workspace.js && node --check app/static/admin.js && node --check app/static/crypto.js
+      - name: Frontend syntax and unit tests
+        run: |
+          for file in app/static/*.js; do node --check "$file"; done
+          node tests/test_service_worker.cjs
+          node tests/test_display_time.cjs
+          node tests/test_version.cjs
+      - name: Desktop notification and security unit tests
+        run: node --test desktop/tests/*.test.cjs
       - name: Mobile mail template browser test (mock SMTP)
         run: |
           npm install --prefix /tmp/weeklyreport-browser playwright@1.51.1
@@ -22,6 +30,9 @@ jobs:
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_accounts.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_login.cjs
           PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_distribution.cjs
+          PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_pwa.cjs
+          PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_guide.cjs
+          PLAYWRIGHT_NODE_MODULES=/tmp/weeklyreport-browser/node_modules node tests/browser_version.cjs
       - run: docker compose config --quiet
         env:
           ADMIN_PASSWORD: ci-only-password-not-for-production
@@ -35,4 +46,3 @@ jobs:
           done
           docker logs weeklyreport-test
           exit 1
-

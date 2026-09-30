@@ -1,0 +1,72 @@
+name: Windows installer
+on:
+  push:
+    branches: [develop]
+    paths: ['desktop/**', 'app/release.json', 'app/release.py', 'scripts/release.py', 'tests/browser_server.py', 'tests/desktop_smoke.cjs', '.github/workflows/windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python scripts/release.py --check
+      - run: npm ci
+        working-directory: desktop
+      - run: npm test
+        working-directory: desktop
+      - name: Build Windows x64 installer
+        run: npm run dist:win
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Install and verify Start Menu shortcut
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem desktop/dist/WeeklyReport-Setup-*.exe | Select-Object -First 1).FullName
+          $install = Join-Path $env:RUNNER_TEMP 'WeeklyReport-installed'
+          $process = Start-Process -FilePath $setup -ArgumentList "/S /D=$install" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          $exe = Join-Path $install 'WeeklyReport.exe'
+          if (!(Test-Path $exe)) { throw 'Installed EXE missing' }
+          $shortcut = Get-ChildItem ([Environment]::GetFolderPath('StartMenu')) -Recurse -Filter '*.lnk' | Where-Object { $_.BaseName -eq '周报填写检查' }
+          if (!$shortcut) { throw 'Start Menu shortcut missing' }
+          "DESKTOP_EXE=$exe" >> $env:GITHUB_ENV
+      - name: Smoke test installed application
+        run: node tests/desktop_smoke.cjs
+        env:
+          DESKTOP_SCREENSHOT: desktop/dist/windows-smoke.png
+      - name: Installer SHA256
+        shell: pwsh
+        run: |
+          Get-ChildItem desktop/dist/WeeklyReport-Setup-*.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Set-Content -Encoding ascii ($_.FullName + '.sha256')
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WeeklyReport-Windows-x64
+          path: |
+            desktop/dist/WeeklyReport-Setup-*.exe
+            desktop/dist/*.sha256
+            desktop/dist/windows-smoke.png
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Windows-diagnostics
+          path: desktop/dist/*-failure.png
+          if-no-files-found: ignore
+          retention-days: 7
