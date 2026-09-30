@@ -139,6 +139,7 @@ dialog[open]::backdrop{animation:backdrop-in .2s ease-out}#toast:not([hidden]){a
 .label-heading{display:inline-flex;align-items:center;gap:5px;max-width:100%;text-align:left}
 .tip-trigger{display:inline-grid;place-items:center;flex:0 0 18px;width:18px;height:18px;min-height:18px;padding:0;margin:0;border:1px solid #b7c3ba;border-radius:50%;background:transparent;color:#6b7d70;font:500 11px/1 system-ui;vertical-align:middle;transition:none}
 .tip-trigger:hover,.tip-trigger[aria-expanded=true]{color:#28513b;border-color:#71967f;background:#edf3ee}
+.tip-trigger:active:not(:disabled){transform:none}
 .tip-trigger:focus-visible{outline:2px solid #83b49a;outline-offset:2px}
 .field-tooltip{position:fixed;z-index:1000;padding:8px 10px;background:#263d30;color:#fff;border-radius:6px;font-size:12px;line-height:1.6;box-shadow:0 3px 10px #172f2620;overflow-wrap:anywhere;font-weight:400;text-align:left;pointer-events:none;animation:none;transition:none}
 @media(pointer:coarse){.tip-trigger{flex-basis:28px;width:28px;height:28px;min-height:28px;font-size:12px}}
