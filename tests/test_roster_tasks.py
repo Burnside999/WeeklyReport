@@ -60,7 +60,29 @@ class TaskTests(unittest.TestCase):
     def test_no_forward_fill_and_substring_matching(self):
         cells={(2,1):cell('张三丰'),(4,1):cell('张三')}
         rows=missing_tasks(rule(),cells,[],['张三','张三丰'])
-        self.assertEqual([(x['person'],x['row']) for x in rows],[('张三',2),('张三丰',2),('张三',4)])
+        self.assertEqual([(x['person'],x['row']) for x in rows],[('张三丰',2),('张三',4)])
+
+    def test_nested_names_and_separate_occurrences(self):
+        names = ['张三', '张三丰', '张三丰（分公司）', '李四']
+        for roster in (names, list(reversed(names))):
+            for owner, expected in [
+                ('张三丰（分公司）', {'张三丰（分公司）'}),
+                ('张三丰、张三、张三丰', {'张三丰', '张三'}),
+                ('张三、张三丰（分公司）、李四', {'张三', '张三丰（分公司）', '李四'}),
+                ('张三丰（分公司）、张三丰', {'张三丰（分公司）', '张三丰'}),
+            ]:
+                with self.subTest(roster=roster, owner=owner):
+                    rows = missing_tasks(rule(), {(2,1):cell(owner)}, [], roster)
+                    self.assertEqual([row['person'] for row in rows], [n for n in roster if n in expected])
+
+    def test_consumed_names_do_not_join_remaining_text(self):
+        rows = missing_tasks(rule(), {(2,1):cell('张欧阳明三')}, [], ['张三', '欧阳明'])
+        self.assertEqual([row['person'] for row in rows], ['欧阳明'])
+
+    def test_excluded_names_still_resolve_ownership(self):
+        rows = missing_tasks(rule(), {(2,1):cell('张三丰'), (3,1):cell('张三丰、张三')},
+                             [], ['张三', '张三丰'], ['张三丰'])
+        self.assertEqual([(row['person'], row['row']) for row in rows], [('张三', 3)])
     def test_text_only_and_multiple_columns(self):
         cells={(2,1):cell('甲'),(2,3):{'cellValue':{'number':0}},(2,4):cell(' \n')}
         r=rule(start_row=2,end_row=2,target_columns=[3,4])

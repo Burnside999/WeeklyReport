@@ -102,6 +102,30 @@ class DistributionMonitorTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):self.tmp=tempfile.TemporaryDirectory();self.store=Store(self.tmp.name+'/db')
     async def asyncTearDown(self):self.store.close();self.tmp.cleanup()
 
+    async def test_nested_names_with_merged_tasks_and_exclusions(self):
+        for direction in ['row', 'column']:
+            for excluded in ([], ['张三丰']):
+                with self.subTest(direction=direction, excluded=excluded):
+                    client = MatrixClient()
+                    row = {(1,2):cell('张三丰'), (1,4):cell('张三'),
+                           (1,5):cell('张三丰、张三'), (4,4):cell('完成')}
+                    client.cells['row'] = row
+                    client.cells['column'] = {(c,r):v for (r,c),v in row.items()}
+                    client.cells['names'] = {(2,10):cell('张三'), (3,10):cell('张三丰')}
+                    source = validate_source(dict(sheet_id='names',column=10,start_row=2,end_row=3))
+                    self.store.set('roster',dict(source=source,names=[],excluded=excluded))
+                    config = (row_rule(end_column=5) if direction == 'row' else
+                              rule(sheet_id='column',target_columns=[3,4],end_row=5))
+                    self.store.set('rules',[config])
+                    await Monitor(self.store,client).check()
+                    snapshot = self.store.get('snapshot')
+                    self.assertFalse(snapshot['stale'],snapshot['errors'])
+                    self.assertEqual([r['person'] for r in snapshot['records']],
+                                     ['张三'] if excluded else ['张三丰','张三','张三丰'])
+                    self.assertEqual(snapshot['people_count'],1 if excluded else 2)
+                    self.assertEqual(snapshot['rule_people'][config['id']],
+                                     ['张三'] if excluded else ['张三','张三丰'])
+
     async def test_sources_and_rules_allow_all_four_direction_combinations(self):
         for source_direction in ['row','column']:
             for rule_direction in ['row','column']:

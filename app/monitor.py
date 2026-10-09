@@ -78,7 +78,7 @@ class Monitor:
                                     if key not in cache:
                                         cache[key] = await reader(fid,*key[1:],headers)
                                     cells.update({((track,index) if horizontal else (index,track)):value for index,value in cache[key].items()})
-                                results.extend(missing_tasks(rule,cells,merges,names))
+                                results.extend(missing_tasks(rule,cells,merges,roster['names'],roster['excluded']))
                             except (TencentError, ValueError) as exc:
                                 errors.append(dict(rule=rule['name'], message=str(exc)))
             except (TencentError, ValueError) as exc:

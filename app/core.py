@@ -264,17 +264,25 @@ def task_ranges(rule, merges):
     return spans
 
 
-def missing_tasks(rule, cells, merges, names):
+def missing_tasks(rule, cells, merges, names, excluded=()):
     spans = task_ranges(rule,merges)
     horizontal = is_row(rule)
     if horizontal:
         cells = {(col,row):value for (row,col),value in cells.items()}
     merges = oriented_merges(rule,merges)
     rule = rule_axes(rule)
+    candidates = sorted((name for name in names if name), key=len, reverse=True)
+    excluded = set(excluded)
     result = []
     for first, last, owner_col in spans:
         owner = written_text(cells.get((first, owner_col)))
-        people = [name for name in names if name in owner]
+        remaining = [owner]
+        matched = set()
+        for name in candidates:
+            if any(name in part for part in remaining):
+                matched.add(name)
+                remaining = [piece for part in remaining for piece in part.split(name) if piece]
+        people = [name for name in names if name in matched and name not in excluded]
         if not people:
             continue
         filled = False
