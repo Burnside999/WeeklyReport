@@ -89,6 +89,7 @@ function sheetBody(f) {
 function edit(rule) {
   form.reset();form.hidden=false;$('#form-title').textContent=rule?'编辑监听规则':'添加监听规则';
   setDistribution(form,rule?.distribution || 'column');
+  form.elements.target_operator.value=rule?.target_operator || 'or';
   if(rule) {
     for(const key of ['id','name','variable_name','owner_column','start_row','end_row','owner_row','start_column','end_column']) {
       if(rule[key]!==undefined)form.elements[key].value=key.endsWith('column')?col(rule[key]):rule[key];
@@ -101,9 +102,10 @@ function edit(rule) {
   form.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function ruleDescription(r) {
-  return r.distribution==='row'
+  const description=r.distribution==='row'
     ? `${r.sheet_name} · 行分布 · 责任人第 ${r.owner_row} 行 → 检查第 ${r.target_rows.join('、')} 行 · ${col(r.start_column)}–${col(r.end_column)} 列`
     : `${r.sheet_name} · 列分布 · 责任人 ${col(r.owner_column)} 列 → 检查 ${(r.target_columns || [r.target_column]).map(col).join('、')} 列 · 第 ${r.start_row}–${r.end_row} 行`;
+  return `${description} · ${r.target_operator==='and'?'且规则':'或规则'}`;
 }
 $('#add-rule').onclick=()=>edit(); $('#cancel-rule').onclick=()=>form.hidden=true;
 async function renderRules() {

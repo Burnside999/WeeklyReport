@@ -81,6 +81,9 @@ def validate_rule(raw):
     enabled = raw.get('enabled', True)
     if type(enabled) is not bool:
         raise ValueError('启用状态必须为布尔值')
+    target_operator = raw.get('target_operator', 'or')
+    if target_operator not in ('or', 'and'):
+        raise ValueError('请选择“或”或“且”填写条件')
     targets = raw.get('target_rows', [2]) if horizontal else raw.get('target_columns', [raw.get('target_column', 'B')])
     if isinstance(targets, str):
         targets = re.split(r'[,，、\s]+', targets.strip())
@@ -89,7 +92,7 @@ def validate_rule(raw):
     parse_axis = (lambda v: integer(v, 1, 100000, '行号')) if horizontal else column
     targets = sorted(set(parse_axis(v) for v in targets))
     base = dict(name=name, sheet_id=sheet, sheet_name=str(raw.get('sheet_name', ''))[:100],
-                distribution=distribution, enabled=enabled)
+                distribution=distribution, enabled=enabled, target_operator=target_operator)
     if horizontal:
         return base | dict(owner_row=parse_axis(raw.get('owner_row', 1)), target_rows=targets,
                            start_column=start, end_column=end)
@@ -273,6 +276,8 @@ def missing_tasks(rule, cells, merges, names, excluded=()):
     rule = rule_axes(rule)
     candidates = sorted((name for name in names if name), key=len, reverse=True)
     excluded = set(excluded)
+    targets = target_columns(rule)
+    require_all = rule.get('target_operator', 'or') == 'and'
     result = []
     for first, last, owner_col in spans:
         owner = written_text(cells.get((first, owner_col)))
@@ -286,8 +291,9 @@ def missing_tasks(rule, cells, merges, names, excluded=()):
         if not people:
             continue
         filled = False
+        filled_targets = set()
         for row in range(first, last + 1):
-            for col in target_columns(rule):
+            for col in targets:
                 anchor = (row, col)
                 for top, bottom, left, right in merges:
                     if top <= row <= bottom and left <= col <= right:
@@ -296,8 +302,10 @@ def missing_tasks(rule, cells, merges, names, excluded=()):
                         anchor = (top, left)
                         break
                 if written_text(cells.get(anchor)):
-                    filled = True
-                    break
+                    filled_targets.add(col)
+                    filled = not require_all or len(filled_targets) == len(targets)
+                    if filled:
+                        break
             if filled:
                 break
         if not filled:
