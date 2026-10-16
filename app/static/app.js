@@ -62,6 +62,42 @@ $('#auto-query').onchange = async event => {
 };
 const form=$('#rule-form'),sourceForm=$('#source-form');
 const sheetLoads=new Map();
+function columnSelection(values) {
+  const ranges=[];let first=values[0],last=first;
+  for(const value of [...values.slice(1),null]) {
+    if(value===last+1){last=value;continue;}
+    ranges.push(first===last?col(first):`${col(first)}-${col(last)}`);first=last=value;
+  }
+  return ranges.join(',');
+}
+function validateColumnTargets() {
+  const input=form.elements.target_columns;
+  try {
+    const text=input.value.trim().replace(/\s*-\s*/g,'-');
+    if(/(^|[,，、])\s*([,，、]|$)/.test(text))throw Error('列范围格式错误，请使用 A-D,E-G,Z-AK');
+    const parts=text.split(/[,，、\s]+/), columns=new Set();
+    if(parts.length>20)throw Error('请选择 1–20 个需要检查的列');
+    const number=value=>{
+      let n=0;
+      if(/^[A-Z]{1,3}$/i.test(value))for(const c of value.toUpperCase())n=n*26+c.charCodeAt(0)-64;
+      else if(/^[0-9]+$/.test(value))n=Number(value);
+      else throw Error('列必须是数字或 A、B、AA 等字母');
+      if(n<1 || n>16384)throw Error('列号范围为 1–16384');
+      return n;
+    };
+    for(const part of parts) {
+      const ends=part.split('-');
+      if(ends.length>2)throw Error('列范围格式错误，请使用 A-D,E-G,Z-AK');
+      const first=number(ends[0]),last=ends.length===2?number(ends[1]):first;
+      if(ends.length===2 && first>=last)throw Error('列范围起点必须小于终点');
+      if(last-first+1>20)throw Error('展开后最多检查 20 列');
+      for(let n=first;n<=last;n++)columns.add(n);
+      if(columns.size>20)throw Error('展开后最多检查 20 列');
+    }
+    input.setCustomValidity('');
+  } catch(error){input.setCustomValidity(error.message);}
+}
+form.elements.target_columns.addEventListener('input',validateColumnTargets);
 function setDistribution(f,value=f.elements.distribution.value) {
   f.elements.distribution.value=value;
   for(const fields of f.querySelectorAll('.axis-fields'))fields.hidden=fields.disabled=fields.dataset.distribution!==value;
@@ -95,8 +131,9 @@ function edit(rule) {
       if(rule[key]!==undefined)form.elements[key].value=key.endsWith('column')?col(rule[key]):rule[key];
     }
     if(rule.distribution==='row')form.elements.target_rows.value=rule.target_rows.join(',');
-    else form.elements.target_columns.value=(rule.target_columns || [rule.target_column]).map(col).join(',');
+    else form.elements.target_columns.value=columnSelection(rule.target_columns || [rule.target_column]);
   } else form.elements.id.value='';
+  validateColumnTargets();
   form.elements.enabled.checked=rule?rule.enabled:true;
   loadSheetOptions($('#sheet-select'),$('#load-sheets'),rule?.sheet_id || '');
   form.scrollIntoView({behavior:'smooth',block:'start'});

@@ -200,6 +200,32 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.reload();await loopCard.waitFor();
     assert.equal(await loopCard.locator('.syntax-warning').count(),0);
     assert(!(await loopCard.getByRole('button',{name:'发送邮件',exact:true}).isDisabled()));
-    assert.deepEqual(errors,[]);console.log('Mobile mail editor, highlight, manual confirmation and automatic reset: PASS');
+    await page.locator('#add-template').click();await page.locator('#template-form').waitFor({state:'visible'});
+    await page.locator('#mail-recipients input').fill('window@example.com');await page.locator('#mail-subject').fill('时段邮件');await page.locator('#mail-body').fill('时段检查');
+    await page.locator('[name=mail_mode][value=auto]').check();await page.locator('#schedule-kind').selectOption('window');
+    assert(await page.locator('#schedule-clock').isDisabled());assert(await page.locator('#schedule-fixed').isDisabled());
+    await page.locator('#schedule-window-start-day').selectOption('6');await page.locator('#schedule-window-end-day').selectOption('4');
+    assert.equal(await page.locator('#schedule-window-end-clock').evaluate(e=>e.validity.valid),false);
+    await page.locator('#schedule-window-start-day').selectOption('4');await page.locator('#schedule-window-end-clock').fill('15:30:00');
+    assert.equal(await page.locator('#schedule-window-end-clock').evaluate(e=>e.validity.valid),false);
+    await page.locator('#schedule-window-end-day').selectOption('6');await page.locator('#schedule-window-end-clock').fill('17:00:00');
+    assert.equal(await page.locator('#schedule-window-end-clock').evaluate(e=>e.validity.valid),true);
+    for(const width of [320,390,600,1280]){await page.setViewportSize({width,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`window form overflow ${width}`);}
+    await page.locator('#condition-variable').selectOption('global.listencount');await page.locator('#condition-operator').selectOption('eq');await page.locator('#condition-value').fill('0');
+    await page.locator('#save-template').click();await page.locator('#template-form').waitFor({state:'hidden'});
+    const windowCard=page.locator('#template-list article').filter({has:page.getByRole('heading',{name:'时段邮件',exact:true})});
+    await windowCard.locator('.rule-meta').filter({hasText:'周五 15:30:00–周日 17:00:00'}).waitFor();
+    await page.reload();await windowCard.getByRole('button',{name:'编辑',exact:true}).click();
+    assert.equal(await page.locator('#schedule-kind').inputValue(),'window');assert.equal(await page.locator('#schedule-window-start-day').inputValue(),'4');assert.equal(await page.locator('#schedule-window-end-day').inputValue(),'6');
+    assert.equal(await page.locator('#schedule-window-start-clock').inputValue(),'15:30:00');assert.equal(await page.locator('#schedule-window-end-clock').inputValue(),'17:00:00');
+    await page.locator('#schedule-kind').selectOption('weekly');assert(await page.locator('#schedule-window-start-clock').isDisabled());
+    await page.locator('#schedule-kind').selectOption('window');assert.equal(await page.locator('#schedule-window-start-clock').inputValue(),'15:30:00');
+    await page.locator('#schedule-window-start-clock').fill('09:30');
+    if(process.env.BROWSER_SCREENSHOT_DIR){await page.setViewportSize({width:390,height:844});await page.screenshot({path:process.env.BROWSER_SCREENSHOT_DIR+'/weekly-window-mobile.png',fullPage:true});}
+    await page.locator('#save-template').click();await page.locator('#template-form').waitFor({state:'hidden'});
+    const beforeWindow=(await (await page.request.get(base+'/test/deliveries')).json()).length;
+    await page.request.post(base+'/test/tick',{data:{},headers});await page.request.post(base+'/test/tick',{data:{},headers});
+    const afterWindow=await (await page.request.get(base+'/test/deliveries')).json();assert.equal(afterWindow.length,beforeWindow+1);assert.equal(afterWindow.at(-1).subject,'时段邮件');
+    assert.deepEqual(errors,[]);console.log('Mail editor, existing schedules, weekly window validation and persistence, and once-per-window delivery: PASS');
   }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(error=>{console.error(error);process.exitCode=1;});

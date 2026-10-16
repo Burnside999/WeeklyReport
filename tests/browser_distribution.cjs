@@ -47,13 +47,20 @@ const server=spawn('python',['tests/browser_server.py'],{env:{...process.env,PYT
     await page.locator('#nav-home').click();await page.locator('#records td').filter({hasText:'张三'}).waitFor();await page.locator('#records td').filter({hasText:'李四'}).waitFor();assert(await page.locator('#records').innerText().then(t=>t.includes('第 2、3 行 · B 列')));
     await page.locator('#nav-variables').click();await page.locator('#variable-rows').getByText('weekly.personrow',{exact:true}).waitFor();assert.equal(await page.locator('#variable-rows').getByText('weekly.personcol',{exact:true}).count(),0);assert(await page.locator('#variable-rows').innerText().then(t=>t.includes('责任人所在行')));
     // Returning to column mode submits only column fields and updates all labels.
-    await page.locator('#nav-manage').click();await page.locator('#rules-list').getByRole('button',{name:'编辑',exact:true}).click();await form.locator('option:checked').filter({hasText:'研发'}).waitFor({state:'attached'});await form.locator('[name=distribution][value=column]').check();await form.locator('[name=target_columns]').fill('C,D');await form.locator('[name=end_row]').fill('3');await form.locator('[type=submit]').click();await form.waitFor({state:'hidden'});await page.locator('.rule-meta').filter({hasText:'列分布'}).waitFor();
+    await page.locator('#nav-manage').click();await page.locator('#rules-list').getByRole('button',{name:'编辑',exact:true}).click();await form.locator('option:checked').filter({hasText:'研发'}).waitFor({state:'attached'});await form.locator('[name=distribution][value=column]').check();
+    const columns=form.locator('[name=target_columns]');
+    for(const invalid of ['D-C','C-C','A-','A--D','A-D,,F','A-U']){await columns.fill(invalid);assert.equal(await columns.evaluate(e=>e.validity.valid),false,invalid);}
+    await columns.fill('C-D');assert.equal(await columns.evaluate(e=>e.validity.valid),true);await form.locator('[name=end_row]').fill('3');await form.locator('[type=submit]').click();await form.waitFor({state:'hidden'});await page.locator('.rule-meta').filter({hasText:'列分布'}).waitFor();
     const edited=bodies.findLast(([path])=>path.startsWith('/api/rules/'))[1];assert(!('owner_row' in edited));assert.equal(edited.distribution,'column');assert.equal(edited.target_operator,'and');
-    await page.locator('#rules-list').getByRole('button',{name:'编辑',exact:true}).click();await form.locator('option:checked').filter({hasText:'研发'}).waitFor({state:'attached'});assert(await form.locator('[name=target_operator][value=and]').isChecked());
+    await page.locator('#rules-list').getByRole('button',{name:'编辑',exact:true}).click();await form.locator('option:checked').filter({hasText:'研发'}).waitFor({state:'attached'});assert(await form.locator('[name=target_operator][value=and]').isChecked());assert.equal(await columns.inputValue(),'C-D');
+    await columns.fill('A-D,E-G,Z-AK');assert.equal(await columns.evaluate(e=>e.validity.valid),true);
     await form.locator('[name=target_operator][value=or]').check();await form.locator('[type=submit]').click();await form.waitFor({state:'hidden'});await page.locator('.rule-meta').filter({hasText:'或规则'}).waitFor();
+    const expanded=(await (await page.request.get(base+'/api/rules',{headers:{'X-Document-ID':did}})).json())[0];
+    assert.deepEqual(expanded.target_columns,[1,2,3,4,5,6,7,26,27,28,29,30,31,32,33,34,35,36,37]);
+    for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`range rule overflow ${width}`);}
     // A failed list refresh cannot leave a manually editable or stale sheet selection.
     await page.route('**/api/sheets',route=>route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:'测试读取失败'})}));
     await page.locator('#rules-list').getByRole('button',{name:'编辑',exact:true}).click();await form.locator('option').filter({hasText:'读取失败'}).waitFor({state:'attached'});assert.equal(await form.locator('[name=sheet_id]').inputValue(),'');assert.equal(await form.locator('[name=sheet_id]').evaluate(e=>e.validity.valid),false);
-    assert.deepEqual(errors,[]);console.log('Sheet dropdowns, row/column forms, OR/AND defaults and persistence, row statistics, variable labels and responsive layouts: PASS');
+    assert.deepEqual(errors,[]);console.log('Sheet dropdowns, row/column forms, column ranges and validation, OR/AND persistence, statistics and responsive layouts: PASS');
   } finally {if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -95,19 +95,29 @@
   }
   const weekdayNames=['周一','周二','周三','周四','周五','周六','周日'];
   const selectedDays=()=>[...form.querySelectorAll('[name=schedule_weekday]:checked')].map(input=>Number(input.value));
+  function windowOffset(edge) {
+    const value=$(`#schedule-window-${edge}-clock`).value;
+    if(!/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/.test(value))return NaN;
+    const [h,m,s=0]=value.split(':').map(Number);
+    return Number($(`#schedule-window-${edge}-day`).value)*86400+h*3600+m*60+s;
+  }
   function scheduleFields() {
-    const weekly=$('#schedule-kind').value==='weekly', days=selectedDays();
+    const kind=$('#schedule-kind').value,weekly=kind==='weekly',window=kind==='window',fixed=kind==='fixed',days=selectedDays();
     $('#schedule-weekly-fields').hidden=!weekly;$('#schedule-weekly-fields').disabled=!weekly;
-    $('#schedule-fixed-fields').hidden=weekly;$('#schedule-fixed').disabled=weekly;
+    $('#schedule-window-fields').hidden=!window;$('#schedule-window-fields').disabled=!window;
+    $('#schedule-fixed-fields').hidden=!fixed;$('#schedule-fixed').disabled=!fixed;
     form.querySelector('[name=schedule_weekday]').setCustomValidity(weekly && !days.length?'请至少选择一个检查日':'');
-    $('#schedule-preview').textContent=weekly && !days.length ? '请至少选择一个检查日' : '';
+    const invalidWindow=window && windowOffset('start')>=windowOffset('end');
+    const error=invalidWindow?'按周一至周日计算，开始时间必须早于结束时间':'';
+    $('#schedule-window-end-clock').setCustomValidity(error);
+    $('#schedule-preview').textContent=weekly && !days.length?'请至少选择一个检查日':window?(error || '本时段触发一次后等待下周，结束时刻停止检查。'):'';
   }
   function modeFields() {
     const auto=form.elements.mail_mode.value==='auto';$('#automatic-fields').hidden=!auto;$('#automatic-fields').disabled=!auto;scheduleFields();
   }
   form.querySelectorAll('[name=mail_mode]').forEach(input=>input.onchange=modeFields);
-  for(const id of ['schedule-kind','schedule-clock','schedule-fixed']) $('#'+id).addEventListener('input',scheduleFields);
-  $('#schedule-clock').addEventListener('blur',()=>{$('#schedule-clock').value=formatClock($('#schedule-clock').value);});
+  for(const id of ['schedule-kind','schedule-clock','schedule-fixed','schedule-window-start-day','schedule-window-start-clock','schedule-window-end-day','schedule-window-end-clock']) $('#'+id).addEventListener('input',scheduleFields);
+  for(const id of ['schedule-clock','schedule-window-start-clock','schedule-window-end-clock']) $('#'+id).addEventListener('blur',()=>{$('#'+id).value=formatClock($('#'+id).value);});
   form.querySelectorAll('[name=schedule_weekday]').forEach(input=>input.onchange=scheduleFields);
   $('#condition-variable').onchange=conditionInput;
   async function edit(item=null) {
@@ -116,10 +126,14 @@
     $('#template-form-title').textContent=item?'编辑邮件模板':'新建邮件模板';
     $('#mail-recipients').replaceChildren();for(const address of item?.recipients || ['']) recipient(address);
     subject.value=item?.subject || '';body.value=item?.body || '';form.elements.mail_mode.value=item?.mode || 'manual';
-    $('#schedule-kind').value=item?.schedule?.kind==='fixed'?'fixed':'weekly';
+    $('#schedule-kind').value=['fixed','weekly','window'].includes(item?.schedule?.kind)?item.schedule.kind:'weekly';
     form.querySelectorAll('[name=schedule_weekday]').forEach(input=>input.checked=(item?.schedule?.weekdays || [4]).includes(Number(input.value)));
     $('#schedule-clock').value=formatClock(item?.schedule?.clock || '09:00:00');
     $('#schedule-fixed').value=item?.schedule?.kind==='fixed'?formatDateTime(item.schedule.value):'';
+    $('#schedule-window-start-day').value=String(item?.schedule?.start_weekday ?? 4);
+    $('#schedule-window-start-clock').value=formatClock(item?.schedule?.start_clock || '15:30:00');
+    $('#schedule-window-end-day').value=String(item?.schedule?.end_weekday ?? 6);
+    $('#schedule-window-end-clock').value=formatClock(item?.schedule?.end_clock || '17:00:00');
     const variable=item?.condition?.variable || 'global.personcount';
     if(!catalog.rows.some(r=>r.name===variable && comparable.has(r.type))) {
       const option=new Option(variable+'（请重新选择）',variable);option.disabled=true;$('#condition-variable').append(option);
@@ -137,12 +151,21 @@
     data.recipients=[...$('#mail-recipients').querySelectorAll('input')].map(i=>i.value.trim());
     Object.assign(data,{subject:subject.value,body:body.value,mode,revision:editing?.revision});
     if(mode==='auto') {
-      data.schedule=kind==='fixed'?{kind,value:$('#schedule-fixed').value}:{kind,weekdays:selectedDays(),clock:$('#schedule-clock').value};
+      data.schedule=kind==='fixed'?{kind,value:$('#schedule-fixed').value}:kind==='window'?
+        {kind,start_weekday:Number($('#schedule-window-start-day').value),start_clock:$('#schedule-window-start-clock').value,
+          end_weekday:Number($('#schedule-window-end-day').value),end_clock:$('#schedule-window-end-clock').value}:
+        {kind,weekdays:selectedDays(),clock:$('#schedule-clock').value};
       data.condition={variable:$('#condition-variable').value,operator:$('#condition-operator').value,value:$('#condition-value').value};
     }
     try {const saved=await api('templates'+(editing?'/'+editing.id:''),editing?'PUT':'POST',data);if(editing && saved.revision!==editing.revision)sentThisPage.delete(editing.id);form.hidden=true;toast('邮件模板已保存');await load();}catch(error){toast(error.message);}finally{button.disabled=false;}
   };
   const mailTime = value => formatDateTime(value, '尚未触发');
+  function scheduleDescription(schedule) {
+    if(schedule.kind==='weekly')return '每逢 '+schedule.weekdays.map(d=>weekdayNames[d]).join('、')+' '+formatClock(schedule.clock);
+    if(schedule.kind==='window')return `每周 ${weekdayNames[schedule.start_weekday]} ${formatClock(schedule.start_clock)}–${weekdayNames[schedule.end_weekday]} ${formatClock(schedule.end_clock)}，每段一次`;
+    if(schedule.kind==='fixed')return formatDateTime(schedule.value)+' 后';
+    return '旧时间配置，请重新编辑';
+  }
   function renderList() {
     const list=$('#template-list');list.replaceChildren();
     if(!items.length) {const empty=el('div',undefined,'empty panel');empty.append(el('h3','还没有邮件模板'),el('p','新建模板，选择接收人并编写邮件。'));list.append(empty);}
@@ -161,7 +184,7 @@
       heading.append(el('h3',item.subject),badges);card.append(heading);
       card.append(el('p',item.recipients.join('、'),'rule-meta'),el('p','上次触发：'+mailTime(item.last_trigger),'help'));
       if(item.last_success)card.append(el('p','上次发送成功：'+mailTime(item.last_success),'help'));
-      if(item.mode==='auto')card.append(el('p',`${item.schedule.kind==='weekly'?'每逢 '+item.schedule.weekdays.map(d=>weekdayNames[d]).join('、')+' '+formatClock(item.schedule.clock):item.schedule.kind==='fixed'?formatDateTime(item.schedule.value)+' 后':'旧时间配置，请重新编辑'} · ${item.condition.variable} ${{gt:'>',lt:'<',eq:'='}[item.condition.operator]} ${item.condition.value}`,'rule-meta'));
+      if(item.mode==='auto')card.append(el('p',`${scheduleDescription(item.schedule)} · ${item.condition.variable} ${{gt:'>',lt:'<',eq:'='}[item.condition.operator]} ${item.condition.value}`,'rule-meta'));
       if(item.error)card.append(el('p',formatEventText(item.error),'error'));
       else if(item.note && item.mode==='auto')card.append(el('p',formatEventText(item.note),'help'));
       const actions=el('div',undefined,'rule-actions'), tools=el('div'), editButton=el('button','编辑','quiet'), remove=el('button','删除','quiet danger');

@@ -55,6 +55,33 @@ def integer(value, low, high, label):
     return n
 
 
+def parse_target_columns(values):
+    if isinstance(values, str):
+        text = re.sub(r'\s*-\s*', '-', values.strip())
+        if re.search(r'(^|[,，、])\s*([,，、]|$)', text):
+            raise ValueError('列范围格式错误，请使用 A-D,E-G,Z-AK')
+        values = re.split(r'[,，、\s]+', text)
+    if not isinstance(values, list) or not 1 <= len(values) <= 20:
+        raise ValueError('请选择 1–20 个需要检查的列')
+    columns = set()
+    for value in values:
+        if isinstance(value, str) and '-' in value:
+            match = re.fullmatch(r'\s*([A-Za-z]{1,3}|[0-9]+)\s*-\s*([A-Za-z]{1,3}|[0-9]+)\s*', value)
+            if not match:
+                raise ValueError('列范围格式错误，请使用 A-D,E-G,Z-AK')
+            first, last = map(column, match.groups())
+            if first >= last:
+                raise ValueError('列范围起点必须小于终点')
+            if last - first + 1 > 20:
+                raise ValueError('展开后最多检查 20 列')
+            columns.update(range(first, last + 1))
+        else:
+            columns.add(column(value))
+        if len(columns) > 20:
+            raise ValueError('展开后最多检查 20 列')
+    return sorted(columns)
+
+
 def validate_rule(raw):
     if not isinstance(raw, dict):
         raise ValueError('规则格式错误')
@@ -85,12 +112,15 @@ def validate_rule(raw):
     if target_operator not in ('or', 'and'):
         raise ValueError('请选择“或”或“且”填写条件')
     targets = raw.get('target_rows', [2]) if horizontal else raw.get('target_columns', [raw.get('target_column', 'B')])
-    if isinstance(targets, str):
-        targets = re.split(r'[,，、\s]+', targets.strip())
-    if not isinstance(targets, list) or not 1 <= len(targets) <= 20:
-        raise ValueError(f'请选择 1–20 个需要检查的{axis}')
     parse_axis = (lambda v: integer(v, 1, 100000, '行号')) if horizontal else column
-    targets = sorted(set(parse_axis(v) for v in targets))
+    if horizontal:
+        if isinstance(targets, str):
+            targets = re.split(r'[,，、\s]+', targets.strip())
+        if not isinstance(targets, list) or not 1 <= len(targets) <= 20:
+            raise ValueError(f'请选择 1–20 个需要检查的{axis}')
+        targets = sorted(set(parse_axis(v) for v in targets))
+    else:
+        targets = parse_target_columns(targets)
     base = dict(name=name, sheet_id=sheet, sheet_name=str(raw.get('sheet_name', ''))[:100],
                 distribution=distribution, enabled=enabled, target_operator=target_operator)
     if horizontal:

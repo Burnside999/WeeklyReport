@@ -4,7 +4,7 @@ import logging
 import operator
 import re
 import secrets
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from .mail import SMTPConfig, SMTPMailer, DeliveryError, recipients_list
 from .variables import LOCAL_TZ, build_variables
@@ -91,6 +91,13 @@ def resolve_time(schedule, current):
     if schedule['kind'] == 'fixed':
         return parse_datetime(schedule['value'])
     current = current.astimezone(LOCAL_TZ)
+    if schedule['kind'] == 'window':
+        monday = current.date() - timedelta(days=current.weekday())
+        start = datetime.combine(monday + timedelta(days=schedule['start_weekday']),
+                                 typed_value('time', schedule['start_clock']), LOCAL_TZ)
+        end = datetime.combine(monday + timedelta(days=schedule['end_weekday']),
+                               typed_value('time', schedule['end_clock']), LOCAL_TZ)
+        return start if current < end else None
     if current.weekday() not in schedule['weekdays']:
         return None
     return datetime.combine(current.date(), typed_value('time', schedule['clock']), LOCAL_TZ)
@@ -128,8 +135,18 @@ def validate_template(raw, catalog, *, check_references=True):
             raise ValueError('请至少选择一个星期，星期须为 0（周一）至 6（周日）')
         result['schedule'] = dict(kind=kind, weekdays=sorted(set(days)),
                                   clock=typed_value('time', schedule.get('clock')).isoformat())
+    elif kind == 'window':
+        start_day, end_day = schedule.get('start_weekday'), schedule.get('end_weekday')
+        if any(type(day) is not int or not 0 <= day <= 6 for day in (start_day, end_day)):
+            raise ValueError('检查时段的星期须为 0（周一）至 6（周日）')
+        start_clock = typed_value('time', schedule.get('start_clock'))
+        end_clock = typed_value('time', schedule.get('end_clock'))
+        if (start_day, start_clock) >= (end_day, end_clock):
+            raise ValueError('按周一至周日计算，检查时段的开始时间必须早于结束时间')
+        result['schedule'] = dict(kind=kind, start_weekday=start_day, start_clock=start_clock.isoformat(),
+                                  end_weekday=end_day, end_clock=end_clock.isoformat())
     else:
-        raise ValueError('请选择固定时刻或每周几检查；旧日期变量配置请重新编辑')
+        raise ValueError('请选择固定时刻、每周几检查或检查时段；旧日期变量配置请重新编辑')
     row = next((r for r in catalog['rows'] if r['name'] == condition.get('variable')), None)
     if not row or row['type'] not in COMPARABLE:
         raise ValueError('触发变量须为整数或布尔值')
@@ -315,7 +332,8 @@ class MailEngine:
                     self.require_valid(item, catalog)
                     target = resolve_time(item['schedule'], current)
                     if target is None:
-                        item['note'] = '今天不在选定的检查日期内，等待下一个检查日'
+                        item['note'] = ('本周检查时段已结束，等待下周' if item['schedule']['kind'] == 'window'
+                                        else '今天不在选定的检查日期内，等待下一个检查日')
                         self.write(item)
                         continue
                     cycle = stamp(target)

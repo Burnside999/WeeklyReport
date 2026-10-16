@@ -106,15 +106,16 @@ class PushTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.engine.get(item['id'])['status'],'sent')
         self.assertEqual(self.db.execute('SELECT state FROM push_deliveries ORDER BY notification_id DESC LIMIT 1').fetchone()[0],'failed')
 
-    async def test_weekly_and_fixed_auto_use_same_push_hook(self):
+    async def test_all_auto_schedules_use_same_push_hook(self):
         await self.register()
         current=datetime(2026,9,25,10,tzinfo=LOCAL_TZ);self.engine.clock=lambda:current
-        for schedule in [{'kind':'weekly','weekdays':[4],'clock':'09:00'}, {'kind':'fixed','value':'2026-09-25T09:00'}]:
+        for schedule in [{'kind':'weekly','weekdays':[4],'clock':'09:00'}, {'kind':'fixed','value':'2026-09-25T09:00'},
+                         {'kind':'window','start_weekday':4,'start_clock':'09:00','end_weekday':6,'end_clock':'17:00'}]:
             item=self.engine.save(template(mode='auto',schedule=schedule,
                 condition={'variable':'global.listencount','operator':'eq','value':'0'}))
             self.choose(item);await self.engine.tick();await self.engine.tick()
-        self.assertEqual(self.db.execute('SELECT count(*) FROM notifications').fetchone()[0],2)
-        self.assertEqual(self.engine.sender.await_count,2)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM notifications').fetchone()[0],3)
+        self.assertEqual(self.engine.sender.await_count,3)
 
     async def test_retry_restart_key_persistence_and_expiry(self):
         await self.register();item=self.engine.save(template());self.choose(item);await self.fire(item)
